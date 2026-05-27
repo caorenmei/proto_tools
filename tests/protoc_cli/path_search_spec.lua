@@ -1,5 +1,6 @@
 require("tests.support.env")
 
+local lfs = require("lfs")
 local path_search = require("protoc_cli.path_search")
 
 describe("protoc_cli.path_search", function()
@@ -9,6 +10,15 @@ describe("protoc_cli.path_search", function()
 
     assert.are.equal("full_feature.proto", resolved.import_name)
     assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/full_feature%.proto$") ~= nil)
+  end)
+
+  it("resolves absolute positional inputs under proto_path", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local absolute_input = lfs.currentdir() .. "/tests/fixtures/protoc/full_feature.proto"
+    local resolved = assert(resolver:resolve_input(absolute_input))
+
+    assert.are.equal("full_feature.proto", resolved.import_name)
+    assert.are.equal(absolute_input, resolved.absolute_path)
   end)
 
   it("resolves imports using the same search roots", function()

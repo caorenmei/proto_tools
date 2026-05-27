@@ -30,6 +30,27 @@ local function join_path(root, name)
   return root .. "/" .. name
 end
 
+local function relative_to_root(root, path)
+  local absolute_root = to_absolute(root)
+
+  if absolute_root == "/" then
+    if path:sub(1, 1) == "/" then
+      return path:sub(2)
+    end
+    return nil
+  end
+
+  if path == absolute_root then
+    return ""
+  end
+
+  if path:sub(1, #absolute_root) == absolute_root and path:sub(#absolute_root + 1, #absolute_root + 1) == "/" then
+    return path:sub(#absolute_root + 2)
+  end
+
+  return nil
+end
+
 function Resolver:_resolve(name)
   for _, root in ipairs(self.proto_paths) do
     local candidate = join_path(root, name)
@@ -52,6 +73,18 @@ function Resolver:_resolve(name)
 end
 
 function Resolver:resolve_input(name)
+  if is_absolute(name) and file_exists(name) then
+    for _, root in ipairs(self.proto_paths) do
+      local import_name = relative_to_root(root, name)
+      if import_name ~= nil then
+        return {
+          import_name = import_name,
+          absolute_path = name,
+        }
+      end
+    end
+  end
+
   return self:_resolve(name)
 end
 
