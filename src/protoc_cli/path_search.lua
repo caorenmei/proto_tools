@@ -33,6 +33,26 @@ local function to_absolute(path)
   return lfs.currentdir() .. "/" .. path
 end
 
+local function canonicalize_absolute(path)
+  local segments = {}
+
+  for segment in to_absolute(path):gmatch("[^/]+") do
+    if segment == ".." then
+      if #segments > 0 then
+        table.remove(segments)
+      end
+    elseif segment ~= "." and segment ~= "" then
+      table.insert(segments, segment)
+    end
+  end
+
+  if #segments == 0 then
+    return "/"
+  end
+
+  return "/" .. table.concat(segments, "/")
+end
+
 local function file_exists(path)
   local handle = io.open(path, "rb")
   if not handle then
@@ -57,7 +77,7 @@ local function join_path(root, name)
 end
 
 local function relative_to_root(root, path)
-  local absolute_root = to_absolute(normalize_root(root))
+  local absolute_root = root
 
   if absolute_root ~= "/" then
     absolute_root = absolute_root:gsub("/+$", "")
@@ -81,6 +101,17 @@ local function relative_to_root(root, path)
   return nil
 end
 
+function Resolver:_resolve_error(name)
+  return nil, {
+    exit_code = 1,
+    message = string.format(
+      "unable to resolve '%s' from --proto_path (%s)",
+      name,
+      table.concat(self.proto_paths, ", ")
+    ),
+  }
+end
+
 function Resolver:_resolve(name)
   for _, root in ipairs(self.proto_paths) do
     local candidate = join_path(root, name)
@@ -92,27 +123,25 @@ function Resolver:_resolve(name)
     end
   end
 
-  return nil, {
-    exit_code = 1,
-    message = string.format(
-      "unable to resolve '%s' from --proto_path (%s)",
-      name,
-      table.concat(self.proto_paths, ", ")
-    ),
-  }
+  return self:_resolve_error(name)
 end
 
 function Resolver:resolve_input(name)
-  if is_absolute(name) and file_exists(name) then
-    for _, root in ipairs(self.proto_paths) do
-      local import_name = relative_to_root(root, name)
-      if import_name ~= nil then
-        return {
-          import_name = import_name,
-          absolute_path = name,
-        }
+  if is_absolute(name) then
+    if file_exists(name) then
+      local canonical_name = canonicalize_absolute(name)
+      for i, root in ipairs(self.canonical_proto_paths) do
+        local import_name = relative_to_root(root, canonical_name)
+        if import_name ~= nil then
+          return {
+            import_name = import_name,
+            absolute_path = name,
+          }
+        end
       end
     end
+
+    return self:_resolve_error(name)
   end
 
   return self:_resolve(name)
@@ -126,12 +155,15 @@ local M = {}
 
 function M.new(proto_paths)
   local normalized_proto_paths = {}
+  local canonical_proto_paths = {}
   for i, proto_path in ipairs(proto_paths) do
     normalized_proto_paths[i] = normalize_root(proto_path)
+    canonical_proto_paths[i] = canonicalize_absolute(normalized_proto_paths[i])
   end
 
   return setmetatable({
     proto_paths = normalized_proto_paths,
+    canonical_proto_paths = canonical_proto_paths,
   }, Resolver)
 end
 

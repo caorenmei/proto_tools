@@ -56,4 +56,27 @@ describe("protoc_cli.path_search", function()
     assert.is_true(err.message:match("missing%.proto") ~= nil)
     assert.is_true(err.message:match("tests/fixtures/protoc") ~= nil)
   end)
+
+  it("returns a structured error for absolute inputs outside all proto roots", function()
+    local resolver = path_search.new({ "." })
+    local absolute_input = lfs.currentdir() .. "/../../gen_model-dev-1.rockspec"
+    local resolved, err = resolver:resolve_input(absolute_input)
+
+    assert.is_nil(resolved)
+    assert.are.equal(1, err.exit_code)
+    assert.is_true(err.message:match("gen_model%-dev%-1%.rockspec") ~= nil)
+    assert.is_true(err.message:match("%.") ~= nil)
+  end)
+
+  it("returns a structured error for absolute inputs whose .. segments escape a proto root", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc/imports" })
+    local absolute_input = lfs.currentdir()
+      .. "/tests/fixtures/protoc/imports/../../../protoc_cli/path_search_spec.lua"
+    local resolved, err = resolver:resolve_input(absolute_input)
+
+    assert.is_nil(resolved)
+    assert.are.equal(1, err.exit_code)
+    assert.is_true(err.message:match("path_search_spec%.lua") ~= nil)
+    assert.is_true(err.message:match("tests/fixtures/protoc/imports") ~= nil)
+  end)
 end)
