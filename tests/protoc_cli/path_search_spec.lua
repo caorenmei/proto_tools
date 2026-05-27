@@ -12,6 +12,14 @@ describe("protoc_cli.path_search", function()
     assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/full_feature%.proto$") ~= nil)
   end)
 
+  it("normalizes ./ prefixed positional inputs to canonical import_name", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local resolved = assert(resolver:resolve_input("./full_feature.proto"))
+
+    assert.are.equal("full_feature.proto", resolved.import_name)
+    assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/full_feature%.proto$") ~= nil)
+  end)
+
   it("resolves absolute positional inputs under proto_path", function()
     local resolver = path_search.new({ "tests/fixtures/protoc" })
     local absolute_input = lfs.currentdir() .. "/tests/fixtures/protoc/full_feature.proto"
@@ -45,6 +53,14 @@ describe("protoc_cli.path_search", function()
 
     assert.are.equal("imports/shared.proto", resolved.import_name)
     assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/imports/shared%.proto$") ~= nil)
+  end)
+
+  it("normalizes imports with traversing segments to canonical import_name", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local resolved = assert(resolver:resolve_import("imports/../full_feature.proto"))
+
+    assert.are.equal("full_feature.proto", resolved.import_name)
+    assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/full_feature%.proto$") ~= nil)
   end)
 
   it("returns a structured error for relative names whose .. segments escape a nested proto root", function()
@@ -99,5 +115,27 @@ describe("protoc_cli.path_search", function()
     assert.are.equal(1, err.exit_code)
     assert.is_true(err.message:match("path_search_spec%.lua") ~= nil)
     assert.is_true(err.message:match("tests/fixtures/protoc/imports") ~= nil)
+  end)
+
+  it("returns a structured error for symlink escape attempts under a proto root", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local link_path = lfs.currentdir() .. "/tests/fixtures/protoc/symlink_escape.proto"
+    local target_path = lfs.currentdir() .. "/tests/protoc_cli/path_search_spec.lua"
+    os.remove(link_path)
+    assert.are.equal(true, lfs.link(target_path, link_path, true))
+
+    local ok, err_or_nil = xpcall(function()
+      local resolved, err = resolver:resolve_input("symlink_escape.proto")
+
+      assert.is_nil(resolved)
+      assert.are.equal(1, err.exit_code)
+      assert.is_true(err.message:match("symlink_escape%.proto") ~= nil)
+      assert.is_true(err.message:match("tests/fixtures/protoc") ~= nil)
+    end, debug.traceback)
+
+    os.remove(link_path)
+    if not ok then
+      error(err_or_nil, 0)
+    end
   end)
 end)

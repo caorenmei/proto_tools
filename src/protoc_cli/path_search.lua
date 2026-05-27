@@ -53,6 +53,27 @@ local function canonicalize_absolute(path)
   return "/" .. table.concat(segments, "/")
 end
 
+local function has_symlink_segment(path)
+  local segments = {}
+
+  for segment in to_absolute(path):gmatch("[^/]+") do
+    if segment == ".." then
+      if #segments > 0 then
+        table.remove(segments)
+      end
+    elseif segment ~= "." and segment ~= "" then
+      table.insert(segments, segment)
+
+      local candidate = "/" .. table.concat(segments, "/")
+      if lfs.symlinkattributes(candidate, "mode") == "link" then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
 local function file_exists(path)
   local handle = io.open(path, "rb")
   if not handle then
@@ -117,10 +138,11 @@ function Resolver:_resolve(name)
     local candidate = join_path(root, name)
     local canonical_candidate = canonicalize_absolute(candidate)
     local canonical_root = self.canonical_proto_paths[i]
+    local import_name = relative_to_root(canonical_root, canonical_candidate)
 
-    if relative_to_root(canonical_root, canonical_candidate) ~= nil and file_exists(canonical_candidate) then
+    if import_name ~= nil and not has_symlink_segment(candidate) and file_exists(canonical_candidate) then
       return {
-        import_name = name,
+        import_name = import_name,
         absolute_path = canonical_candidate,
       }
     end
@@ -131,7 +153,7 @@ end
 
 function Resolver:resolve_input(name)
   if is_absolute(name) then
-    if file_exists(name) then
+    if not has_symlink_segment(name) and file_exists(name) then
       local canonical_name = canonicalize_absolute(name)
       for i, root in ipairs(self.canonical_proto_paths) do
         local import_name = relative_to_root(root, canonical_name)
