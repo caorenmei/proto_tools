@@ -53,25 +53,28 @@ local function canonicalize_absolute(path)
   return "/" .. table.concat(segments, "/")
 end
 
-local function has_symlink_segment(path)
-  local segments = {}
+local function shell_quote(value)
+  return "'" .. value:gsub("'", "'\\''") .. "'"
+end
 
-  for segment in to_absolute(path):gmatch("[^/]+") do
-    if segment == ".." then
-      if #segments > 0 then
-        table.remove(segments)
-      end
-    elseif segment ~= "." and segment ~= "" then
-      table.insert(segments, segment)
-
-      local candidate = "/" .. table.concat(segments, "/")
-      if lfs.symlinkattributes(candidate, "mode") == "link" then
-        return true
-      end
-    end
+local function realpath_existing(path)
+  local handle = io.popen(
+    "realpath -e -- " .. shell_quote(to_absolute(path)) .. " 2>/dev/null",
+    "r"
+  )
+  if not handle then
+    return nil
   end
 
-  return false
+  local resolved = handle:read("*a")
+  handle:close()
+
+  resolved = resolved:gsub("%s+$", "")
+  if resolved == "" then
+    return nil
+  end
+
+  return resolved
 end
 
 local function file_exists(path)
@@ -136,15 +139,17 @@ end
 function Resolver:_resolve(name)
   for i, root in ipairs(self.proto_paths) do
     local candidate = join_path(root, name)
-    local canonical_candidate = canonicalize_absolute(candidate)
-    local canonical_root = self.canonical_proto_paths[i]
-    local import_name = relative_to_root(canonical_root, canonical_candidate)
+    local real_candidate = realpath_existing(candidate)
+    local real_root = self.real_proto_paths[i]
 
-    if import_name ~= nil and not has_symlink_segment(candidate) and file_exists(canonical_candidate) then
-      return {
-        import_name = import_name,
-        absolute_path = canonical_candidate,
-      }
+    if real_candidate ~= nil and real_root ~= nil then
+      local import_name = relative_to_root(real_root, real_candidate)
+      if import_name ~= nil then
+        return {
+          import_name = import_name,
+          absolute_path = real_candidate,
+        }
+      end
     end
   end
 
@@ -153,10 +158,10 @@ end
 
 function Resolver:resolve_input(name)
   if is_absolute(name) then
-    if not has_symlink_segment(name) and file_exists(name) then
-      local canonical_name = canonicalize_absolute(name)
-      for i, root in ipairs(self.canonical_proto_paths) do
-        local import_name = relative_to_root(root, canonical_name)
+    local real_name = realpath_existing(name)
+    if real_name ~= nil then
+      for i, root in ipairs(self.real_proto_paths) do
+        local import_name = root ~= nil and relative_to_root(root, real_name) or nil
         if import_name ~= nil then
           return {
             import_name = import_name,
@@ -185,14 +190,17 @@ local M = {}
 function M.new(proto_paths)
   local normalized_proto_paths = {}
   local canonical_proto_paths = {}
+  local real_proto_paths = {}
   for i, proto_path in ipairs(proto_paths) do
     normalized_proto_paths[i] = normalize_root(proto_path)
     canonical_proto_paths[i] = canonicalize_absolute(normalized_proto_paths[i])
+    real_proto_paths[i] = realpath_existing(normalized_proto_paths[i])
   end
 
   return setmetatable({
     proto_paths = normalized_proto_paths,
     canonical_proto_paths = canonical_proto_paths,
+    real_proto_paths = real_proto_paths,
   }, Resolver)
 end
 

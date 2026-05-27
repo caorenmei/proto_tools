@@ -117,6 +117,25 @@ describe("protoc_cli.path_search", function()
     assert.is_true(err.message:match("tests/fixtures/protoc/imports") ~= nil)
   end)
 
+  it("resolves inputs from a symlinked configured proto root", function()
+    local link_path = lfs.currentdir() .. "/tests/fixtures/protoc_symlink_root"
+    os.remove(link_path)
+    assert.are.equal(true, lfs.link("protoc", link_path, true))
+
+    local ok, err_or_nil = xpcall(function()
+      local resolver = path_search.new({ "tests/fixtures/protoc_symlink_root" })
+      local resolved = assert(resolver:resolve_input("full_feature.proto"))
+
+      assert.are.equal("full_feature.proto", resolved.import_name)
+      assert.is_true(resolved.absolute_path:match("tests/fixtures/protoc/full_feature%.proto$") ~= nil)
+    end, debug.traceback)
+
+    os.remove(link_path)
+    if not ok then
+      error(err_or_nil, 0)
+    end
+  end)
+
   it("returns a structured error for symlink escape attempts under a proto root", function()
     local resolver = path_search.new({ "tests/fixtures/protoc" })
     local link_path = lfs.currentdir() .. "/tests/fixtures/protoc/symlink_escape.proto"
