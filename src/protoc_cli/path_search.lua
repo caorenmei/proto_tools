@@ -113,12 +113,15 @@ function Resolver:_resolve_error(name)
 end
 
 function Resolver:_resolve(name)
-  for _, root in ipairs(self.proto_paths) do
+  for i, root in ipairs(self.proto_paths) do
     local candidate = join_path(root, name)
-    if file_exists(candidate) then
+    local canonical_candidate = canonicalize_absolute(candidate)
+    local canonical_root = self.canonical_proto_paths[i]
+
+    if relative_to_root(canonical_root, canonical_candidate) ~= nil and file_exists(canonical_candidate) then
       return {
         import_name = name,
-        absolute_path = to_absolute(candidate),
+        absolute_path = canonical_candidate,
       }
     end
   end
@@ -148,6 +151,10 @@ function Resolver:resolve_input(name)
 end
 
 function Resolver:resolve_import(name)
+  if is_absolute(name) then
+    return self:_resolve_error(name)
+  end
+
   return self:_resolve(name)
 end
 
