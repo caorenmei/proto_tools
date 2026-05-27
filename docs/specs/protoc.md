@@ -17,6 +17,10 @@
 - 使用 `lua-protobuf` 库的的 pb 模块来加载生成的描述文件，验证其正确性。
 - 使用 `lua-protobuf` 库的的 pb 模块来序列化和反序列化数据，确保生成的描述文件能够正确处理数据。
 
+## 参考文献
+
+- `docs/books/lua-protobuf.md`
+
 ## 入口文件
 
 tools/protoc_cli.lua
