@@ -16,6 +16,7 @@ dependencies = {
    "argparse",
    "busted",
    "lua-cjson",
+   "luafilesystem",
 }
 
 build = {
