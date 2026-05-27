@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package demo.secondary;
+
+import "full_feature.proto";
+import "imports/shared.proto";
+
+message AuditEntry {
+  string actor = 1;
+  demo.full.RichMessage payload = 2;
+  demo.shared.SharedNote note = 3;
+}

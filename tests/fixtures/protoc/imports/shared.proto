@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package demo.shared;
+
+message SharedNote {
+  string id = 1;
+  bool enabled = 2;
+}
+
+enum SharedKind {
+  SHARED_KIND_UNSPECIFIED = 0;
+  SHARED_KIND_PRIMARY = 1;
+  SHARED_KIND_SECONDARY = 2;
+}
