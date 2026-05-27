@@ -29,6 +29,15 @@ describe("protoc_cli.path_search", function()
     assert.are.equal(absolute_input, resolved.absolute_path)
   end)
 
+  it("canonicalizes absolute_path for non-canonical absolute positional inputs", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local absolute_input = lfs.currentdir() .. "/tests/fixtures/protoc/imports/../full_feature.proto"
+    local resolved = assert(resolver:resolve_input(absolute_input))
+
+    assert.are.equal("full_feature.proto", resolved.import_name)
+    assert.are.equal(lfs.currentdir() .. "/tests/fixtures/protoc/full_feature.proto", resolved.absolute_path)
+  end)
+
   it("resolves absolute positional inputs under the current directory root", function()
     local resolver = path_search.new({ "." })
     local absolute_input = lfs.currentdir() .. "/tests/fixtures/protoc/full_feature.proto"
@@ -91,6 +100,26 @@ describe("protoc_cli.path_search", function()
     assert.is_nil(resolved)
     assert.are.equal(1, err.exit_code)
     assert.is_true(err.message:match("missing%.proto") ~= nil)
+    assert.is_true(err.message:match("tests/fixtures/protoc") ~= nil)
+  end)
+
+  it("returns a structured error for directory positional inputs", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local resolved, err = resolver:resolve_input("imports")
+
+    assert.is_nil(resolved)
+    assert.are.equal(1, err.exit_code)
+    assert.is_true(err.message:match("imports") ~= nil)
+    assert.is_true(err.message:match("tests/fixtures/protoc") ~= nil)
+  end)
+
+  it("returns a structured error for directory imports", function()
+    local resolver = path_search.new({ "tests/fixtures/protoc" })
+    local resolved, err = resolver:resolve_import("imports")
+
+    assert.is_nil(resolved)
+    assert.are.equal(1, err.exit_code)
+    assert.is_true(err.message:match("imports") ~= nil)
     assert.is_true(err.message:match("tests/fixtures/protoc") ~= nil)
   end)
 

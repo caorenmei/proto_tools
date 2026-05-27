@@ -58,6 +58,7 @@ local function shell_quote(value)
 end
 
 local function realpath_existing(path)
+  -- Relies on Linux/GNU realpath -e to canonicalize only existing paths.
   local handle = io.popen(
     "realpath -e -- " .. shell_quote(to_absolute(path)) .. " 2>/dev/null",
     "r"
@@ -77,13 +78,8 @@ local function realpath_existing(path)
   return resolved
 end
 
-local function file_exists(path)
-  local handle = io.open(path, "rb")
-  if not handle then
-    return false
-  end
-  handle:close()
-  return true
+local function is_regular_file(path)
+  return lfs.attributes(path, "mode") == "file"
 end
 
 local function join_path(root, name)
@@ -142,7 +138,7 @@ function Resolver:_resolve(name)
     local real_candidate = realpath_existing(candidate)
     local real_root = self.real_proto_paths[i]
 
-    if real_candidate ~= nil and real_root ~= nil then
+    if real_candidate ~= nil and real_root ~= nil and is_regular_file(real_candidate) then
       local import_name = relative_to_root(real_root, real_candidate)
       if import_name ~= nil then
         return {
@@ -159,13 +155,13 @@ end
 function Resolver:resolve_input(name)
   if is_absolute(name) then
     local real_name = realpath_existing(name)
-    if real_name ~= nil then
+    if real_name ~= nil and is_regular_file(real_name) then
       for i, root in ipairs(self.real_proto_paths) do
         local import_name = root ~= nil and relative_to_root(root, real_name) or nil
         if import_name ~= nil then
           return {
             import_name = import_name,
-            absolute_path = name,
+            absolute_path = real_name,
           }
         end
       end
