@@ -7,7 +7,26 @@ local function is_absolute(path)
   return path:sub(1, 1) == "/"
 end
 
+local function normalize_root(root)
+  if root == "" or root == "." or root == "/" then
+    return root
+  end
+
+  while root:sub(-1) == "/" do
+    root = root:sub(1, -2)
+    if root == "/" then
+      return root
+    end
+  end
+
+  return root
+end
+
 local function to_absolute(path)
+  if path == "." or path == "" then
+    return lfs.currentdir()
+  end
+
   if is_absolute(path) then
     return path
   end
@@ -24,14 +43,25 @@ local function file_exists(path)
 end
 
 local function join_path(root, name)
+  root = normalize_root(root)
+
   if root == "." or root == "" then
     return name
   end
+
+  if root == "/" then
+    return "/" .. name
+  end
+
   return root .. "/" .. name
 end
 
 local function relative_to_root(root, path)
-  local absolute_root = to_absolute(root)
+  local absolute_root = to_absolute(normalize_root(root))
+
+  if absolute_root ~= "/" then
+    absolute_root = absolute_root:gsub("/+$", "")
+  end
 
   if absolute_root == "/" then
     if path:sub(1, 1) == "/" then
@@ -95,8 +125,13 @@ end
 local M = {}
 
 function M.new(proto_paths)
+  local normalized_proto_paths = {}
+  for i, proto_path in ipairs(proto_paths) do
+    normalized_proto_paths[i] = normalize_root(proto_path)
+  end
+
   return setmetatable({
-    proto_paths = proto_paths,
+    proto_paths = normalized_proto_paths,
   }, Resolver)
 end
 
