@@ -16,7 +16,7 @@ local function new_parser()
 
   parser:argument("inputs")
     :target("inputs")
-    :args("*")
+    :args("+")
     :argname("<proto>")
 
   return parser

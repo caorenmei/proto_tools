@@ -43,4 +43,14 @@ describe("protoc_cli.args.parse", function()
     assert.are.equal(2, err.exit_code)
     assert.are.equal("missing required option '--descriptor_set_out'", err.message)
   end)
+
+  it("rejects calls with no input protos", function()
+    local ok, err = args.parse({
+      "--descriptor_set_out", "tests/tmp/out.pb",
+    })
+
+    assert.is_false(ok)
+    assert.are.equal(2, err.exit_code)
+    assert.are.equal("missing argument 'inputs'", err.message)
+  end)
 end)
