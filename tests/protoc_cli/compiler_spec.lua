@@ -24,6 +24,10 @@ local function find_file(files, name)
   end
 end
 
+local function repeated_values(field)
+  return field or {}
+end
+
 describe("protoc_cli.compiler", function()
   before_each(function()
     os.execute("rm -rf tests/tmp && mkdir -p tests/tmp/proto_root")
@@ -639,6 +643,93 @@ message AliasRequest {
     local file = assert(find_file(set.file, "alias_canonical.proto"))
 
     assert.same({ "full_feature.proto" }, file.dependency)
+  end)
+
+  it("does not populate public_dependency for a plain import", function()
+    write_file("tests/tmp/proto_root/plain_import.proto", [[
+syntax = "proto3";
+
+package demo.imports;
+
+import "full_feature.proto";
+
+message PlainImport {
+  demo.full.RichMessage value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = {
+        "tests/tmp/proto_root",
+        "tests/fixtures/protoc",
+      },
+      inputs = { "plain_import.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "plain_import.proto"))
+
+    assert.same({ "full_feature.proto" }, file.dependency)
+    assert.same({}, repeated_values(file.public_dependency))
+    assert.same({}, repeated_values(file.weak_dependency))
+  end)
+
+  it("populates public_dependency only for import public", function()
+    write_file("tests/tmp/proto_root/public_import.proto", [[
+syntax = "proto2";
+
+package demo.imports;
+
+import public "full_feature.proto";
+
+message PublicImport {
+  optional demo.full.RichMessage value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = {
+        "tests/tmp/proto_root",
+        "tests/fixtures/protoc",
+      },
+      inputs = { "public_import.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "public_import.proto"))
+
+    assert.same({ "full_feature.proto" }, file.dependency)
+    assert.same({ 0 }, repeated_values(file.public_dependency))
+    assert.same({}, repeated_values(file.weak_dependency))
+  end)
+
+  it("populates weak_dependency only for import weak", function()
+    write_file("tests/tmp/proto_root/weak_import.proto", [[
+syntax = "proto2";
+
+package demo.imports;
+
+import weak "full_feature.proto";
+
+message WeakImport {
+  optional string value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = {
+        "tests/tmp/proto_root",
+        "tests/fixtures/protoc",
+      },
+      inputs = { "weak_import.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "weak_import.proto"))
+
+    assert.same({ "full_feature.proto" }, file.dependency)
+    assert.same({}, repeated_values(file.public_dependency))
+    assert.same({ 0 }, repeated_values(file.weak_dependency))
   end)
 
   it("returns a structured error when an imported file has invalid syntax", function()

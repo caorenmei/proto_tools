@@ -197,6 +197,54 @@ source = replace_once(source, [[
    end
 ]], "rpc terminator")
 
+source = replace_once(source, [[
+function toplevel:import(lex, info)
+   local mode = lex:ident('"weak" or "public"', 'opt') or "public"
+   if mode ~= 'weak' and mode ~= 'public' then
+      return lex:error '"weak or "public" expected'
+   end
+   local name = lex:quote()
+   lex:line_end()
+   local result = self:parsefile(name)
+   if self.on_import then
+      self.on_import(result)
+   end
+   local dep = default(info, 'dependency')
+   local index = #dep
+   dep[index+1] = name
+   if mode == "public" then
+      local it = default(info, 'public_dependency')
+      insert_tab(it, index)
+   else
+      local it = default(info, 'weak_dependency')
+      insert_tab(it, index)
+   end
+end
+]], [[
+function toplevel:import(lex, info)
+   local mode = lex:ident('"weak" or "public"', 'opt')
+   if mode ~= nil and mode ~= 'weak' and mode ~= 'public' then
+      return lex:error '"weak or "public" expected'
+   end
+   local name = lex:quote()
+   lex:line_end()
+   local result = self:parsefile(name)
+   if self.on_import then
+      self.on_import(result)
+   end
+   local dep = default(info, 'dependency')
+   local index = #dep
+   dep[index+1] = name
+   if mode == "public" then
+      local it = default(info, 'public_dependency')
+      insert_tab(it, index)
+   elseif mode == "weak" then
+      local it = default(info, 'weak_dependency')
+      insert_tab(it, index)
+   end
+end
+]], "import dependency semantics")
+
 local env = setmetatable({}, { __index = _ENV })
 local chunk = assert(load(source, "@" .. protoc_path .. " (patched)", "t", env))
 
