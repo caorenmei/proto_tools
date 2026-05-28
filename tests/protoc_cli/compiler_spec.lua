@@ -721,6 +721,43 @@ message Beta {
     assert.is_true(err.message:match("root_b/common%.proto") ~= nil)
   end)
 
+  it("rejects a top-level input that reuses a previous input type without importing it", function()
+    write_file("tests/tmp/proto_root/a.proto", [[
+syntax = "proto3";
+
+package demo.one;
+
+message A {
+  string value = 1;
+}
+]])
+
+    write_file("tests/tmp/proto_root/b.proto", [[
+syntax = "proto3";
+
+package demo.two;
+
+message B {
+  demo.one.A value = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = {
+        "a.proto",
+        "b.proto",
+      },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("b%.proto") ~= nil)
+  end)
+
   it("rejects brace-valued option blocks missing a trailing semicolon", function()
     local ok = os.execute("mkdir -p tests/tmp/proto_root/google/protobuf")
     assert.is_true(ok)

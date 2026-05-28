@@ -66,12 +66,8 @@ local function compile_resolved(parser, resolved)
   return assert(parser:compile(read_source(resolved), resolved.import_name))
 end
 
-function M.compile(config)
-  local resolver = path_search.new(config.proto_paths or { "." })
+local function new_parser(resolver, resolved_files)
   local parser = protoc.new()
-  local files = {}
-  local seen = {}
-  local resolved_files = {}
 
   parser.proto3_optional = true
   parser.include_imports = true
@@ -85,6 +81,15 @@ function M.compile(config)
     return import_parser:parse(read_source(resolved), resolved.import_name)
   end
 
+  return parser
+end
+
+function M.compile(config)
+  local resolver = path_search.new(config.proto_paths or { "." })
+  local files = {}
+  local seen = {}
+  local resolved_files = {}
+
   local ok, result = xpcall(function()
     for _, input in ipairs(config.inputs or {}) do
       local resolved, err = resolver:resolve_input(input)
@@ -93,6 +98,7 @@ function M.compile(config)
       end
 
       register_resolved_file(resolved_files, resolved)
+      local parser = new_parser(resolver, resolved_files)
       local set = assert(
         pb.decode(
           ".google.protobuf.FileDescriptorSet",
