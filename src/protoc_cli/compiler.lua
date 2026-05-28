@@ -55,6 +55,13 @@ local function read_source(resolved)
   return source
 end
 
+local function canonicalize_dependencies(resolver, file)
+  for i, dependency in ipairs(file.dependency or {}) do
+    local resolved = assert(resolver:resolve_import(dependency))
+    file.dependency[i] = resolved.import_name
+  end
+end
+
 local function compile_resolved(parser, resolved)
   return assert(parser:compile(read_source(resolved), resolved.import_name))
 end
@@ -92,6 +99,10 @@ function M.compile(config)
           compile_resolved(parser, resolved)
         )
       )
+
+      for _, file in ipairs(set.file or {}) do
+        canonicalize_dependencies(resolver, file)
+      end
 
       append_files(files, seen, set)
     end

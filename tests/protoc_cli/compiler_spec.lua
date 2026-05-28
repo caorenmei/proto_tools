@@ -517,6 +517,61 @@ message Outside {
     assert.is_true(err.message:match("%.%./escape%.proto") ~= nil)
   end)
 
+  it("rewrites dependency entries to canonical import names", function()
+    write_file("tests/tmp/proto_root/alias.proto", [[
+syntax = "proto3";
+
+package demo.alias;
+
+import "imports/../full_feature.proto";
+
+message AliasRequest {
+  demo.full.RichMessage value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = {
+        "tests/tmp/proto_root",
+        "tests/fixtures/protoc",
+      },
+      inputs = { "alias.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "alias.proto"))
+
+    assert.same({ "full_feature.proto" }, file.dependency)
+    assert.is_not_nil(find_file(set.file, "full_feature.proto"))
+  end)
+
+  it("preserves already canonical dependency entries", function()
+    write_file("tests/tmp/proto_root/alias_canonical.proto", [[
+syntax = "proto3";
+
+package demo.alias;
+
+import "full_feature.proto";
+
+message AliasRequest {
+  demo.full.RichMessage value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = {
+        "tests/tmp/proto_root",
+        "tests/fixtures/protoc",
+      },
+      inputs = { "alias_canonical.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "alias_canonical.proto"))
+
+    assert.same({ "full_feature.proto" }, file.dependency)
+  end)
+
   it("returns a structured error when an imported file has invalid syntax", function()
     write_file("tests/tmp/proto_root/main.proto", [[
 syntax = "proto3";
