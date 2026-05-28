@@ -62,6 +62,15 @@ describe("protoc_cli.path_search", function()
     assert.are.equal(absolute_input, resolved.absolute_path)
   end)
 
+  it("resolves absolute positional inputs under a later valid proto_path when an earlier root is missing", function()
+    local resolver = path_search.new({ "tests/tmp/missing-proto-root", "tests/fixtures/protoc" })
+    local absolute_input = lfs.currentdir() .. "/tests/fixtures/protoc/full_feature.proto"
+    local resolved = assert(resolver:resolve_input(absolute_input))
+
+    assert.are.equal("full_feature.proto", resolved.import_name)
+    assert.are.equal(absolute_input, resolved.absolute_path)
+  end)
+
   it("resolves imports using the same search roots", function()
     local resolver = path_search.new({ "tests/fixtures/protoc" })
     local resolved = assert(resolver:resolve_import("imports/shared.proto"))
