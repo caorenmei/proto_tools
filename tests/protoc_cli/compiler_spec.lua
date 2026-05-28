@@ -1,5 +1,6 @@
 require("tests.support.env")
 
+local lfs = require("lfs")
 local pb = require("pb")
 local protoc = require("protoc")
 local compiler = require("protoc_cli.compiler")
@@ -549,6 +550,101 @@ message Broken {
       message = err.message,
     }, err)
     assert.is_true(err.message:match("broken%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("rejects different absolute inputs that resolve to the same logical proto name", function()
+    local ok = os.execute("mkdir -p tests/tmp/root_a tests/tmp/root_b")
+    assert.is_true(ok)
+
+    write_file("tests/tmp/root_a/common.proto", [[
+syntax = "proto3";
+
+package demo.alpha;
+
+message Alpha {
+  string value = 1;
+}
+]])
+
+    write_file("tests/tmp/root_b/common.proto", [[
+syntax = "proto3";
+
+package demo.beta;
+
+message Beta {
+  string value = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = {
+        "tests/tmp/root_a",
+        "tests/tmp/root_b",
+      },
+      inputs = {
+        lfs.currentdir() .. "/tests/tmp/root_a/common.proto",
+        lfs.currentdir() .. "/tests/tmp/root_b/common.proto",
+      },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("common%.proto") ~= nil)
+    assert.is_true(err.message:match("root_a/common%.proto") ~= nil)
+    assert.is_true(err.message:match("root_b/common%.proto") ~= nil)
+  end)
+
+  it("rejects brace-valued option blocks missing a trailing semicolon", function()
+    local ok = os.execute("mkdir -p tests/tmp/proto_root/google/protobuf")
+    assert.is_true(ok)
+
+    write_file("tests/tmp/proto_root/google/protobuf/descriptor.proto", [[
+syntax = "proto2";
+package google.protobuf;
+message FileOptions {
+  extensions 1000 to max;
+}
+]])
+
+    write_file("tests/tmp/proto_root/bad_brace_option.proto", [[
+syntax = "proto2";
+
+package demo.brace;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FileOptions {
+  optional Meta custom = 50001;
+}
+
+message Meta {
+  optional string value = 1;
+}
+
+option (custom) = {
+  value: "x"
+} // trailing comment and missing semicolon
+
+message Thing {
+  optional string name = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "bad_brace_option.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("bad_brace_option%.proto") ~= nil)
     assert.is_true(err.message:match("';' expected") ~= nil)
   end)
 end)

@@ -96,4 +96,53 @@ message Broken {
     assert.is_true(stderr:match("bad_cli%.proto") ~= nil)
     assert.is_true(stderr:match("';' expected") ~= nil)
   end)
+
+  it("returns a non-zero exit code and stderr for a brace-valued option block missing a semicolon", function()
+    local ok = os.execute("mkdir -p tests/tmp/google/protobuf")
+    assert.is_true(ok)
+
+    write_file("tests/tmp/google/protobuf/descriptor.proto", [[
+syntax = "proto2";
+package google.protobuf;
+message FileOptions {
+  extensions 1000 to max;
+}
+]])
+
+    write_file("tests/tmp/bad_brace_cli.proto", [[
+syntax = "proto2";
+
+package demo.brace;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FileOptions {
+  optional Meta custom = 50001;
+}
+
+message Meta {
+  optional string value = 1;
+}
+
+option (custom) = {
+  value: "x"
+} // trailing comment and missing semicolon
+
+message Thing {
+  optional string name = 1;
+}
+]])
+
+    local ok, _, code = run_cli(
+      "--proto_path tests/tmp --descriptor_set_out tests/tmp/cli.pb bad_brace_cli.proto",
+      "tests/tmp/cli-error.err"
+    )
+
+    assert.is_nil(ok)
+    assert.are.equal(1, code)
+
+    local stderr = read_file("tests/tmp/cli-error.err")
+    assert.is_true(stderr:match("bad_brace_cli%.proto") ~= nil)
+    assert.is_true(stderr:match("';' expected") ~= nil)
+  end)
 end)
