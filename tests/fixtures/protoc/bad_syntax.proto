@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package demo.bad
+
+message Broken {
+  string missing_semicolon = 1;
+}
