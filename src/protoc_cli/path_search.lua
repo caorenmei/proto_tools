@@ -190,10 +190,9 @@ function Resolver:resolve_input(name)
     if real_name ~= nil and is_regular_file(real_name) then
       for i, root in ipairs(self.real_proto_paths) do
         local real_import_name = root ~= nil and relative_to_root(root, real_name) or nil
-        local import_name = root ~= nil and relative_to_root(self.canonical_proto_paths[i], logical_name) or nil
-        if real_import_name ~= nil and import_name ~= nil then
+        if real_import_name ~= nil then
           return {
-            import_name = import_name,
+            import_name = real_import_name,
             absolute_path = real_name,
           }
         end

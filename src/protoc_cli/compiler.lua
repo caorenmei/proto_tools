@@ -44,6 +44,72 @@ local function register_resolved_file(seen, resolved)
   seen[resolved.import_name] = resolved.absolute_path
 end
 
+local function qualify(scope, name)
+  if scope == nil or scope == "" then
+    return name
+  end
+
+  return scope .. "." .. name
+end
+
+local function register_symbol(symbols, symbol, file_name)
+  local existing = symbols[symbol]
+  if existing and existing ~= file_name then
+    error(
+      string.format(
+        "duplicate fully-qualified symbol '%s' found in files '%s' and '%s'",
+        symbol,
+        existing,
+        file_name
+      ),
+      0
+    )
+  end
+
+  symbols[symbol] = file_name
+end
+
+local function register_message_symbols(symbols, scope, message, file_name)
+  local message_name = qualify(scope, message.name)
+  register_symbol(symbols, message_name, file_name)
+
+  for _, nested in ipairs(message.nested_type or {}) do
+    register_message_symbols(symbols, message_name, nested, file_name)
+  end
+
+  for _, enum in ipairs(message.enum_type or {}) do
+    register_symbol(symbols, qualify(message_name, enum.name), file_name)
+  end
+
+  for _, extension in ipairs(message.extension or {}) do
+    register_symbol(symbols, qualify(message_name, extension.name), file_name)
+  end
+end
+
+local function register_file_symbols(symbols, seen_files, file)
+  if seen_files[file.name] then
+    return
+  end
+
+  local scope = file.package or ""
+
+  for _, message in ipairs(file.message_type or {}) do
+    register_message_symbols(symbols, scope, message, file.name)
+  end
+
+  for _, enum in ipairs(file.enum_type or {}) do
+    register_symbol(symbols, qualify(scope, enum.name), file.name)
+  end
+
+  for _, service in ipairs(file.service or {}) do
+    register_symbol(symbols, qualify(scope, service.name), file.name)
+  end
+
+  for _, extension in ipairs(file.extension or {}) do
+    register_symbol(symbols, qualify(scope, extension.name), file.name)
+  end
+end
+
 local function read_source(resolved)
   local handle, err = io.open(resolved.absolute_path, "rb")
   if not handle then
@@ -89,6 +155,7 @@ function M.compile(config)
   local files = {}
   local seen = {}
   local resolved_files = {}
+  local symbols = {}
 
   local ok, result = xpcall(function()
     for _, input in ipairs(config.inputs or {}) do
@@ -108,6 +175,7 @@ function M.compile(config)
 
       for _, file in ipairs(set.file or {}) do
         canonicalize_dependencies(resolver, file)
+        register_file_symbols(symbols, seen, file)
       end
 
       append_files(files, seen, set)

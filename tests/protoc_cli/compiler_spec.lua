@@ -576,6 +576,44 @@ message Alias {
     end
   end)
 
+  it("rejects duplicate fully-qualified symbols across separate top-level inputs", function()
+    write_file("tests/tmp/proto_root/one.proto", [[
+syntax = "proto3";
+
+package demo.dup;
+
+message Same {
+  string first = 1;
+}
+]])
+
+    write_file("tests/tmp/proto_root/two.proto", [[
+syntax = "proto3";
+
+package demo.dup;
+
+message Same {
+  string second = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = {
+        "one.proto",
+        "two.proto",
+      },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("demo%.dup%.Same") ~= nil)
+    assert.is_true(err.message:match("duplicate") ~= nil)
+  end)
+
   it("preserves already canonical dependency entries", function()
     write_file("tests/tmp/proto_root/alias_canonical.proto", [[
 syntax = "proto3";

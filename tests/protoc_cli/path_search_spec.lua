@@ -171,6 +171,40 @@ describe("protoc_cli.path_search", function()
     end
   end)
 
+  it("resolves absolute inputs under a symlinked proto root using the logical import name", function()
+    local ok = os.execute("rm -rf tests/tmp/path-search-symlink-root && mkdir -p tests/tmp/path-search-symlink-root/actual/nested")
+    assert.is_true(ok)
+
+    write_file("tests/tmp/path-search-symlink-root/actual/nested/file.proto", [[
+syntax = "proto3";
+
+package demo.symlink;
+
+message Linked {
+  string value = 1;
+}
+]])
+
+    local symlink_root = lfs.currentdir() .. "/tests/tmp/path-search-symlink-root/proto-link"
+    os.remove(symlink_root)
+    assert.are.equal(true, lfs.link("actual", symlink_root, true))
+
+    local ok_run, err_or_nil = xpcall(function()
+      local resolver = path_search.new({ "tests/tmp/path-search-symlink-root/proto-link" })
+      local absolute_input = lfs.currentdir() .. "/tests/tmp/path-search-symlink-root/actual/nested/file.proto"
+      local resolved = assert(resolver:resolve_input(absolute_input))
+
+      assert.are.equal("nested/file.proto", resolved.import_name)
+      assert.are.equal(absolute_input, resolved.absolute_path)
+    end, debug.traceback)
+
+    os.remove(symlink_root)
+    os.remove("tests/tmp/path-search-symlink-root/actual/nested/file.proto")
+    if not ok_run then
+      error(err_or_nil, 0)
+    end
+  end)
+
   it("preserves logical import_name for symlinked positional inputs", function()
     local ok = os.execute("mkdir -p tests/tmp")
     assert.is_true(ok)
