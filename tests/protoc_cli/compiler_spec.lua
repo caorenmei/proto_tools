@@ -545,6 +545,37 @@ message AliasRequest {
     assert.is_not_nil(find_file(set.file, "full_feature.proto"))
   end)
 
+  it("preserves logical descriptor names for symlinked positional inputs", function()
+    write_file("tests/tmp/proto_root/actual.proto", [[
+syntax = "proto3";
+
+package demo.alias;
+
+message Alias {
+  string value = 1;
+}
+]])
+    os.remove("tests/tmp/proto_root/alias.proto")
+    assert.are.equal(true, lfs.link("actual.proto", "tests/tmp/proto_root/alias.proto", true))
+
+    local ok, result = xpcall(function()
+      local bytes = assert(compiler.compile({
+        proto_paths = { "tests/tmp/proto_root" },
+        inputs = { "alias.proto" },
+      }))
+
+      local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+
+      assert.is_not_nil(find_file(set.file, "alias.proto"))
+      assert.is_nil(find_file(set.file, "actual.proto"))
+    end, debug.traceback)
+
+    os.remove("tests/tmp/proto_root/alias.proto")
+    if not ok then
+      error(result, 0)
+    end
+  end)
+
   it("preserves already canonical dependency entries", function()
     write_file("tests/tmp/proto_root/alias_canonical.proto", [[
 syntax = "proto3";

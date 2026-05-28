@@ -78,6 +78,19 @@ local function realpath_existing(path)
   return resolved
 end
 
+local function realpath_available()
+  local handle = io.popen("command -v realpath 2>/dev/null", "r")
+  if not handle then
+    return false
+  end
+
+  local resolved = handle:read("*a")
+  handle:close()
+
+  resolved = resolved:gsub("%s+$", "")
+  return resolved ~= ""
+end
+
 local function is_regular_file(path)
   return lfs.attributes(path, "mode") == "file"
 end
@@ -132,15 +145,29 @@ function Resolver:_resolve_error(name)
   }
 end
 
+function Resolver:_dependency_error()
+  return nil, {
+    exit_code = 1,
+    message = "path resolution requires external 'realpath' in PATH",
+  }
+end
+
 function Resolver:_resolve(name)
+  if not self.realpath_available then
+    return self:_dependency_error()
+  end
+
   for i, root in ipairs(self.proto_paths) do
     local candidate = join_path(root, name)
+    local logical_candidate = canonicalize_absolute(candidate)
     local real_candidate = realpath_existing(candidate)
     local real_root = self.real_proto_paths[i]
+    local canonical_root = self.canonical_proto_paths[i]
 
     if real_candidate ~= nil and real_root ~= nil and is_regular_file(real_candidate) then
-      local import_name = relative_to_root(real_root, real_candidate)
-      if import_name ~= nil then
+      local real_import_name = relative_to_root(real_root, real_candidate)
+      local import_name = relative_to_root(canonical_root, logical_candidate)
+      if real_import_name ~= nil and import_name ~= nil then
         return {
           import_name = import_name,
           absolute_path = real_candidate,
@@ -153,12 +180,18 @@ function Resolver:_resolve(name)
 end
 
 function Resolver:resolve_input(name)
+  if not self.realpath_available then
+    return self:_dependency_error()
+  end
+
   if is_absolute(name) then
+    local logical_name = canonicalize_absolute(name)
     local real_name = realpath_existing(name)
     if real_name ~= nil and is_regular_file(real_name) then
       for i, root in ipairs(self.real_proto_paths) do
-        local import_name = root ~= nil and relative_to_root(root, real_name) or nil
-        if import_name ~= nil then
+        local real_import_name = root ~= nil and relative_to_root(root, real_name) or nil
+        local import_name = root ~= nil and relative_to_root(self.canonical_proto_paths[i], logical_name) or nil
+        if real_import_name ~= nil and import_name ~= nil then
           return {
             import_name = import_name,
             absolute_path = real_name,
@@ -187,16 +220,20 @@ function M.new(proto_paths)
   local normalized_proto_paths = {}
   local canonical_proto_paths = {}
   local real_proto_paths = {}
+  local realpath_is_available = realpath_available()
   for i, proto_path in ipairs(proto_paths) do
     normalized_proto_paths[i] = normalize_root(proto_path)
     canonical_proto_paths[i] = canonicalize_absolute(normalized_proto_paths[i])
-    real_proto_paths[i] = realpath_existing(normalized_proto_paths[i])
+    if realpath_is_available then
+      real_proto_paths[i] = realpath_existing(normalized_proto_paths[i])
+    end
   end
 
   return setmetatable({
     proto_paths = normalized_proto_paths,
     canonical_proto_paths = canonical_proto_paths,
     real_proto_paths = real_proto_paths,
+    realpath_available = realpath_is_available,
   }, Resolver)
 end
 
