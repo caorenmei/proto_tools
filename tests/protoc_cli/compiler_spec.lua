@@ -139,6 +139,281 @@ describe("protoc_cli.compiler", function()
     assert.is_true(err.message:match("bad_syntax%.proto") ~= nil)
   end)
 
+  it("rejects a package declaration missing a semicolon before a trailing comment", function()
+    write_file("tests/tmp/proto_root/bad_package.proto", [[
+syntax = "proto3";
+
+package demo.bad // trailing comment
+
+message Broken {
+  string value = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "bad_package.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("bad_package%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("rejects a field declaration missing a semicolon before a trailing comment", function()
+    write_file("tests/tmp/proto_root/bad_field.proto", [[
+syntax = "proto3";
+
+package demo.bad;
+
+message Broken {
+  string name = 1 // trailing comment
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "bad_field.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("bad_field%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("rejects a package declaration missing a semicolon before a trailing block comment", function()
+    write_file("tests/tmp/proto_root/bad_package_block.proto", [[
+syntax = "proto3";
+
+package demo.bad /* trailing block comment */
+
+message Broken {
+  string value = 1;
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "bad_package_block.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("bad_package_block%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("rejects a field declaration missing a semicolon before a trailing block comment", function()
+    write_file("tests/tmp/proto_root/bad_field_block.proto", [[
+syntax = "proto3";
+
+package demo.bad;
+
+message Broken {
+  string name = 1 /* trailing block comment */
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "bad_field_block.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("bad_field_block%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("accepts valid single-quoted option strings containing double slashes", function()
+    write_file("tests/tmp/proto_root/single_quote_option.proto", [[
+syntax = "proto3";
+
+package demo.good;
+option java_package = 'com.example//demo';
+
+message Valid {
+  string value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "single_quote_option.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "single_quote_option.proto"))
+
+    assert.are.equal("com.example//demo", file.options.java_package)
+  end)
+
+  it("accepts valid statements with trailing block comments after semicolons", function()
+    write_file("tests/tmp/proto_root/block_comment.proto", [[
+syntax = "proto3";
+
+package demo.good; /* trailing block comment */
+
+message Valid {
+  string value = 1; /* field block comment */
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "block_comment.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "block_comment.proto"))
+
+    assert.are.equal("demo.good", file.package)
+    assert.are.equal("value", file.message_type[1].field[1].name)
+  end)
+
+  it("accepts multiline field options with trailing comments", function()
+    write_file("tests/tmp/proto_root/field_options.proto", [[
+syntax = "proto3";
+
+package demo.good;
+
+message Valid {
+  string value = 1 [
+    json_name = "value" // trailing comment
+  ];
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "field_options.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "field_options.proto"))
+    local field = assert(file.message_type[1].field[1])
+
+    assert.are.equal("value", field.json_name)
+  end)
+
+  it("accepts field and option assignments continued on the next line", function()
+    write_file("tests/tmp/proto_root/multiline_assignments.proto", [[
+syntax = "proto3";
+
+package demo.good;
+option java_package =
+  "com.example.demo";
+
+message Valid {
+  string value =
+    1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "multiline_assignments.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "multiline_assignments.proto"))
+    local field = assert(file.message_type[1].field[1])
+
+    assert.are.equal("com.example.demo", file.options.java_package)
+    assert.are.equal(1, field.number)
+  end)
+
+  it("rejects closing multiline field options that end with a trailing comment but no semicolon", function()
+    write_file("tests/tmp/proto_root/field_options_missing_semicolon.proto", [[
+syntax = "proto3";
+
+package demo.bad;
+
+message Broken {
+  string value = 1 [
+    json_name = "value"
+  ] // trailing comment
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "field_options_missing_semicolon.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("field_options_missing_semicolon%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
+  it("accepts semicolons that appear after multiline block comments", function()
+    write_file("tests/tmp/proto_root/multiline_block_semicolon.proto", [[
+syntax = "proto3";
+
+package demo.good /* comment
+continued */
+;
+
+message Valid {
+  string value = 1 /* field comment
+  continued */
+  ;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "multiline_block_semicolon.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "multiline_block_semicolon.proto"))
+
+    assert.are.equal("demo.good", file.package)
+    assert.are.equal("value", file.message_type[1].field[1].name)
+  end)
+
+  it("rejects extensions declarations missing semicolons before trailing comments", function()
+    write_file("tests/tmp/proto_root/extensions_comment.proto", [[
+syntax = "proto2";
+
+message Broken {
+  extensions 100 to max // trailing comment
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "extensions_comment.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("extensions_comment%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
+  end)
+
   it("prefers the proto_path file over a same-named cwd file", function()
     write_file("full_feature.proto", [[
 syntax = "proto3";
@@ -238,5 +513,42 @@ message Broken {
       message = err.message,
     }, err)
     assert.is_true(err.message:match("broken%.proto") ~= nil)
+  end)
+
+  it("returns a structured error when an imported file is missing a field semicolon before a trailing comment", function()
+    write_file("tests/tmp/proto_root/main.proto", [[
+syntax = "proto3";
+
+package import.bad;
+
+import "broken.proto";
+
+message Main {
+  Broken value = 1;
+}
+]])
+
+    write_file("tests/tmp/proto_root/broken.proto", [[
+syntax = "proto3";
+
+package import.bad;
+
+message Broken {
+  string value = 1 // trailing comment
+}
+]])
+
+    local bytes, err = compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "main.proto" },
+    })
+
+    assert.is_nil(bytes)
+    assert.are.same({
+      exit_code = 1,
+      message = err.message,
+    }, err)
+    assert.is_true(err.message:match("broken%.proto") ~= nil)
+    assert.is_true(err.message:match("';' expected") ~= nil)
   end)
 end)

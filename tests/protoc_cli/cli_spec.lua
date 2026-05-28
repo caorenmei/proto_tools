@@ -7,6 +7,19 @@ local LUA_PATH_VALUE =
   "src/?.lua;src/?/init.lua;lua_modules/share/lua/5.4/?.lua;lua_modules/share/lua/5.4/?/init.lua;;"
 local LUA_CPATH_VALUE = "lua_modules/lib/lua/5.4/?.so;;"
 
+local function write_file(path, content)
+  local handle = assert(io.open(path, "wb"))
+  handle:write(content)
+  handle:close()
+end
+
+local function read_file(path)
+  local handle = assert(io.open(path, "rb"))
+  local content = handle:read("*a")
+  handle:close()
+  return content
+end
+
 local function run_cli(arguments, stderr_path)
   local command = table.concat({
     "LUA_PATH='" .. LUA_PATH_VALUE .. "'",
@@ -58,5 +71,29 @@ describe("tools/protoc_cli.lua", function()
     handle:close()
 
     assert.is_true(stderr:match("missing%.proto") ~= nil)
+  end)
+
+  it("returns a non-zero exit code and stderr for malformed syntax missing a semicolon before a trailing comment", function()
+    write_file("tests/tmp/bad_cli.proto", [[
+syntax = "proto3";
+
+package demo.bad // trailing comment
+
+message Broken {
+  string value = 1;
+}
+]])
+
+    local ok, _, code = run_cli(
+      "--proto_path tests/tmp --descriptor_set_out tests/tmp/cli.pb bad_cli.proto",
+      "tests/tmp/cli-error.err"
+    )
+
+    assert.is_nil(ok)
+    assert.are.equal(1, code)
+
+    local stderr = read_file("tests/tmp/cli-error.err")
+    assert.is_true(stderr:match("bad_cli%.proto") ~= nil)
+    assert.is_true(stderr:match("';' expected") ~= nil)
   end)
 end)

@@ -27,11 +27,205 @@ local function append_files(files, seen, set)
   end
 end
 
-local function validate_source(resolved)
-  for line in io.lines(resolved.absolute_path) do
-    if line:match("^%s*package%s+[%w%.]+%s*$") then
-      error(string.format("%s: ';' expected after package declaration", resolved.import_name), 0)
+local function strip_comments(line, in_block_comment)
+  local quote_char = nil
+  local escaped = false
+  local parts = {}
+  local had_line_comment = false
+  local had_block_comment = false
+  local index = 1
+
+  while index <= #line do
+    local ch = line:sub(index, index)
+    local next_two = line:sub(index, index + 1)
+
+    if in_block_comment then
+      had_block_comment = true
+      if next_two == "*/" then
+        in_block_comment = false
+        index = index + 2
+      else
+        index = index + 1
+      end
+    elseif escaped then
+      table.insert(parts, ch)
+      escaped = false
+      index = index + 1
+    elseif quote_char and ch == "\\" then
+      table.insert(parts, ch)
+      escaped = true
+      index = index + 1
+    elseif quote_char and ch == quote_char then
+      table.insert(parts, ch)
+      quote_char = nil
+      index = index + 1
+    elseif not quote_char and (ch == '"' or ch == "'") then
+      table.insert(parts, ch)
+      quote_char = ch
+      index = index + 1
+    elseif not quote_char and next_two == "//" then
+      had_line_comment = true
+      break
+    elseif not quote_char and next_two == "/*" then
+      had_block_comment = true
+      in_block_comment = true
+      index = index + 2
+    else
+      table.insert(parts, ch)
+      index = index + 1
     end
+  end
+
+  return table.concat(parts), had_line_comment, had_block_comment, in_block_comment
+end
+
+local function missing_semicolon_kind(line)
+  local trimmed = line:match("^%s*(.-)%s*$")
+  if trimmed == "" then
+    return nil
+  end
+
+  if trimmed:match("[;{}%[]%s*$") or trimmed:match(",%s*$") then
+    return nil
+  end
+
+  if trimmed:match("^package%s+") then
+    return "package"
+  end
+
+  if trimmed:match("^syntax%s*=")
+    or trimmed:match("^import%s+")
+    or trimmed:match("^option%s+")
+    or trimmed:match("^reserved%s+")
+    or trimmed:match("^extensions%s+")
+    or trimmed:match("^rpc%s+.-%)%s+returns%s*%b()")
+    or trimmed:match("=")
+  then
+    return "statement"
+  end
+end
+
+local function update_square_bracket_depth(line, depth)
+  local quote_char = nil
+  local escaped = false
+
+  for index = 1, #line do
+    local ch = line:sub(index, index)
+
+    if escaped then
+      escaped = false
+    elseif quote_char and ch == "\\" then
+      escaped = true
+    elseif quote_char and ch == quote_char then
+      quote_char = nil
+    elseif not quote_char and (ch == '"' or ch == "'") then
+      quote_char = ch
+    elseif not quote_char and ch == "[" then
+      depth = depth + 1
+    elseif not quote_char and ch == "]" and depth > 0 then
+      depth = depth - 1
+    end
+  end
+
+  return depth
+end
+
+local function raise_missing_semicolon(resolved, kind, line_number)
+  if kind == "package" then
+    error(string.format("%s:%d: ';' expected after package declaration", resolved.import_name, line_number), 0)
+  end
+
+  error(string.format("%s:%d: ';' expected before end of statement", resolved.import_name, line_number), 0)
+end
+
+local function opens_option_block(line)
+  local trimmed = line:match("^%s*(.-)%s*$")
+  return trimmed:match("=%s*.-%[%s*$") ~= nil
+end
+
+local function validate_source(resolved)
+  local in_block_comment = false
+  local square_bracket_depth = 0
+  local pending_statement = nil
+  local line_number = 0
+  for line in io.lines(resolved.absolute_path) do
+    line_number = line_number + 1
+
+    local uncommented, _, _, next_in_block_comment = strip_comments(line, in_block_comment)
+    local depth_before_line = square_bracket_depth
+    square_bracket_depth = update_square_bracket_depth(uncommented, square_bracket_depth)
+    local trimmed = uncommented:match("^%s*(.-)%s*$")
+
+    if pending_statement then
+      if trimmed == "" then
+        -- Comments and whitespace can separate a statement from its semicolon.
+      elseif trimmed:match("^;") then
+        pending_statement = nil
+      elseif pending_statement.awaiting_value then
+        if trimmed:match(";%s*$") then
+          pending_statement = nil
+        else
+          pending_statement.awaiting_value = trimmed:match("=%s*$") ~= nil
+        end
+      elseif trimmed:match("^%[") then
+        pending_statement.in_option_block = true
+      elseif depth_before_line > 0 or pending_statement.in_option_block then
+        if square_bracket_depth > 0 then
+          pending_statement.in_option_block = true
+        elseif trimmed:match("^%]%s*;") then
+          pending_statement = nil
+        elseif trimmed:match("^%]") then
+          pending_statement.in_option_block = false
+        else
+          raise_missing_semicolon(resolved, pending_statement.kind, pending_statement.line_number)
+        end
+      else
+        raise_missing_semicolon(resolved, pending_statement.kind, pending_statement.line_number)
+      end
+    end
+
+    if not pending_statement then
+      local kind = missing_semicolon_kind(uncommented)
+
+      if kind and depth_before_line == 0 and square_bracket_depth == 0 then
+        pending_statement = {
+          kind = kind,
+          line_number = line_number,
+          in_option_block = false,
+          awaiting_value = trimmed:match("=%s*$") ~= nil,
+        }
+      elseif depth_before_line == 0 and square_bracket_depth > 0 and opens_option_block(uncommented) then
+        pending_statement = {
+          kind = "statement",
+          line_number = line_number,
+          in_option_block = true,
+          awaiting_value = false,
+        }
+      elseif depth_before_line > 0 and square_bracket_depth == 0 and trimmed:match("^%]") then
+        pending_statement = {
+          kind = "statement",
+          line_number = line_number,
+          in_option_block = false,
+          awaiting_value = false,
+        }
+
+        if trimmed:match("^%]%s*;") then
+          pending_statement = nil
+        end
+      end
+    elseif depth_before_line > 0 and square_bracket_depth == 0 and trimmed:match("^%]") then
+      if trimmed:match("^%]%s*;") then
+        pending_statement = nil
+      else
+        pending_statement.in_option_block = false
+      end
+    end
+
+    in_block_comment = next_in_block_comment
+  end
+
+  if pending_statement then
+    raise_missing_semicolon(resolved, pending_statement.kind, pending_statement.line_number)
   end
 end
 
