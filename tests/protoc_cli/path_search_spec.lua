@@ -205,6 +205,39 @@ message Linked {
     end
   end)
 
+  it("preserves alias import_name for absolute symlinked inputs under the logical proto root", function()
+    local ok = os.execute("rm -rf tests/tmp/path-search-absolute-alias && mkdir -p tests/tmp/path-search-absolute-alias/root")
+    assert.is_true(ok)
+
+    write_file("tests/tmp/path-search-absolute-alias/root/actual.proto", [[
+syntax = "proto3";
+
+package demo.alias;
+
+message Alias {
+  string value = 1;
+}
+]])
+
+    local alias_path = lfs.currentdir() .. "/tests/tmp/path-search-absolute-alias/root/alias.proto"
+    os.remove(alias_path)
+    assert.are.equal(true, lfs.link("actual.proto", alias_path, true))
+
+    local ok_run, err_or_nil = xpcall(function()
+      local resolver = path_search.new({ "tests/tmp/path-search-absolute-alias/root" })
+      local resolved = assert(resolver:resolve_input(alias_path))
+
+      assert.are.equal("alias.proto", resolved.import_name)
+      assert.are.equal(lfs.currentdir() .. "/tests/tmp/path-search-absolute-alias/root/actual.proto", resolved.absolute_path)
+    end, debug.traceback)
+
+    os.remove(alias_path)
+    os.remove("tests/tmp/path-search-absolute-alias/root/actual.proto")
+    if not ok_run then
+      error(err_or_nil, 0)
+    end
+  end)
+
   it("preserves logical import_name for symlinked positional inputs", function()
     local ok = os.execute("mkdir -p tests/tmp")
     assert.is_true(ok)

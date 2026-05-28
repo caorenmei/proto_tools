@@ -191,8 +191,10 @@ function Resolver:resolve_input(name)
       for i, root in ipairs(self.real_proto_paths) do
         local real_import_name = root ~= nil and relative_to_root(root, real_name) or nil
         if real_import_name ~= nil then
+          local import_name = relative_to_root(self.canonical_proto_paths[i], logical_name)
+            or real_import_name
           return {
-            import_name = real_import_name,
+            import_name = import_name,
             absolute_path = real_name,
           }
         end
