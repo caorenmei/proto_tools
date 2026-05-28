@@ -12,7 +12,7 @@ description = {
 
 dependencies = {
    "lua >= 5.4",
-   "lua-protobuf",
+   "lua-protobuf == 0.5.3-1",
    "argparse",
    "busted",
    "lua-cjson",

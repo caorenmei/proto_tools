@@ -338,6 +338,43 @@ message Valid {
     assert.are.equal(1, field.number)
   end)
 
+  it("accepts rpc method bodies whose opening brace starts on the next line", function()
+    write_file("tests/tmp/proto_root/rpc_next_line_brace.proto", [[
+syntax = "proto3";
+
+package demo.rpc;
+
+service EchoService {
+  rpc Send (Request) returns (Reply)
+  {
+    option deprecated = true;
+  }
+}
+
+message Request {
+  string value = 1;
+}
+
+message Reply {
+  string value = 1;
+}
+]])
+
+    local bytes = assert(compiler.compile({
+      proto_paths = { "tests/tmp/proto_root" },
+      inputs = { "rpc_next_line_brace.proto" },
+    }))
+
+    local set = assert(pb.decode(".google.protobuf.FileDescriptorSet", bytes))
+    local file = assert(find_file(set.file, "rpc_next_line_brace.proto"))
+    local service = assert(file.service[1])
+    local method = assert(service.method[1])
+
+    assert.are.equal("EchoService", service.name)
+    assert.are.equal("Send", method.name)
+    assert.is_true(method.options.deprecated)
+  end)
+
   it("rejects closing multiline field options that end with a trailing comment but no semicolon", function()
     write_file("tests/tmp/proto_root/field_options_missing_semicolon.proto", [[
 syntax = "proto3";
