@@ -35,6 +35,22 @@ local function validate_source(resolved)
   end
 end
 
+local function read_source(resolved)
+  local handle, err = io.open(resolved.absolute_path, "rb")
+  if not handle then
+    error(err, 0)
+  end
+
+  local source = handle:read("*a")
+  handle:close()
+  return source
+end
+
+local function compile_resolved(parser, resolved)
+  validate_source(resolved)
+  return assert(parser:compile(read_source(resolved), resolved.import_name))
+end
+
 function M.compile(config)
   local resolver = path_search.new(config.proto_paths or { "." })
   local parser = protoc.new()
@@ -43,9 +59,15 @@ function M.compile(config)
 
   parser.proto3_optional = true
   parser.include_imports = true
+  parser.paths = {}
+  parser.unknown_import = function(import_parser, name)
+    local resolved, err = resolver:resolve_import(name)
+    if not resolved then
+      error(err, 0)
+    end
 
-  for _, proto_path in ipairs(resolver.proto_paths) do
-    parser:addpath(proto_path)
+    validate_source(resolved)
+    return import_parser:parse(read_source(resolved), resolved.import_name)
   end
 
   local ok, result = xpcall(function()
@@ -55,12 +77,10 @@ function M.compile(config)
         error(err, 0)
       end
 
-      validate_source(resolved)
-
       local set = assert(
         pb.decode(
           ".google.protobuf.FileDescriptorSet",
-          assert(parser:compilefile(resolved.import_name))
+          compile_resolved(parser, resolved)
         )
       )
 
