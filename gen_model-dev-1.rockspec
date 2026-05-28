@@ -6,6 +6,7 @@ source = {
 }
 
 description = {
+   summary = "Generate protobuf descriptors with lua-protobuf; requires realpath in PATH at runtime.",
    homepage = "*** please enter a project homepage ***",
    license = "*** please specify a license ***"
 }
