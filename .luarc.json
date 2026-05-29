@@ -1,5 +1,5 @@
 {
-    "Lua.runtime.version": "Lua 5.3",
+    "Lua.runtime.version": "Lua 5.4",
     "Lua.runtime.special": {
         "require": "require",
         "import": "require"
@@ -10,11 +10,14 @@
         "?.d.lua"
     ],
     "workspace.ignoreDir": [
-        "lua/config"
+        
     ],
     "workspace.library": [
-        "lua_lib",
-        "lua_scheme",
-        "lua_tests"
+        "src",
+        "tests",
+        "tools",
+        "lua_modules/share/lua/5.5",
+        "lua_modules/share/lua/5.4",
+        "lua_modules/share/lua/5.3"
     ]
 }

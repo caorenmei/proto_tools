@@ -1,0 +1,44 @@
+{
+  "skill_name": "project-init",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我初始化这个 Lua 项目的开发环境，需要安装依赖并生成便利脚本",
+      "expected_output": "检测系统 Lua 版本（优先 5.4），初始化 LuaRocks 本地依赖树，安装 rockspec 中声明的依赖，生成 ./lua 和 ./luarocks 便利脚本，验证环境可用",
+      "files": [],
+      "expectations": [
+        "检测到了系统上可用的 Lua 版本（5.4 或 5.3）",
+        "LuaRocks 本地依赖树已配置（lua_modules/ 目录）",
+        "rockspec 中的依赖已安装（如 lua-protobuf、busted 等）",
+        "生成了 ./lua 便利脚本且可执行",
+        "生成了 ./luarocks 便利脚本且可执行",
+        "验证步骤确认环境可用"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "我克隆了一个 Lua 项目，但运行测试报缺少依赖，能帮我设置一下环境吗",
+      "expected_output": "自动检测 Lua 和 rockspec，安装缺失依赖，生成便利脚本，并提示用户如何运行测试",
+      "files": [],
+      "expectations": [
+        "识别出项目存在 rockspec 文件",
+        "正确诊断了\"缺少依赖\"的问题",
+        "安装了 rockspec 中声明的依赖",
+        "生成了 ./lua 和 ./luarocks 脚本",
+        "向用户说明了如何运行测试"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "我更新了 rockspec，添加了一个新的依赖 luafilesystem，需要重新安装依赖吗",
+      "expected_output": "检测到 rockspec 有变更，询问用户是否重装，用户确认后安装新增依赖",
+      "files": [],
+      "expectations": [
+        "检测到 rockspec 文件已被更新",
+        "询问用户是否重装/更新依赖",
+        "安装或确认安装了新增的 luafilesystem 依赖",
+        "更新后的环境仍然可用"
+      ]
+    }
+  ]
+}
