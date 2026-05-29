@@ -1,5 +1,6 @@
 local argparse = require("argparse")
 
+--- @return table
 local function new_parser()
     local parser = argparse("gen_model", "Generate model code from database schema.")
     parser:option("-d --out_put_dir", "Output directory for generated code.")
@@ -15,9 +16,10 @@ end
 local M = {}
 
 --- @param argv string[]
+--- @return {out_put_dir: string, descriptor_set_file: string}
 function M.parse(argv)
     local parser = new_parser()
-    local ok, parsed_or_err = parser:parse(argv)
+    local ok, parsed_or_err = parser:pparse(argv)
     if not ok then
         error(parsed_or_err)
     end

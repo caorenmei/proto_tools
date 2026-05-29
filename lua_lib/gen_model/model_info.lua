@@ -68,6 +68,7 @@ local EnumTypes = {
 ---@field is_repeated boolean 是否是 repeated 字段
 ---@field is_map boolean 是否是 map 字段
 ---@field is_oneof boolean 是否是 oneof 字段
+---@field oneof_name string oneof 字段名
 ---@field oneof_index integer oneof 字段在 oneof 中的索引，从 1 开始
 ---@field map_key_type FieldType | 0 map 字段 key 的类型
 ---@field map_value_type FieldType | string | 0 map 字段 value 的类型，可能是基本类型，也可能是消息类型的全名
@@ -111,7 +112,8 @@ local EnumTypes = {
 
 local M = {}
 
---- @return DescriptorSetInfo
+---@param descriptor_set google.protobuf.FileDescriptorSet
+---@return DescriptorSetInfo
 function M.build_info(descriptor_set)
     local info = {
         descriptor_set = descriptor_set,
@@ -260,7 +262,7 @@ function M.process_fields(info, file_info, message_info)
     for _, field in ipairs(message_info.fields) do
         local field_descriptor = field.descriptor
         -- 处理 map 字段
-        if field.is_repeated and field.type == FieldType.TYPE_MESSAGE then
+        if field.is_repeated and field.descriptor.type == FieldType.TYPE_MESSAGE then
             local entry_message = info.messages[field.type]
             local entry_descriptor = entry_message.descriptor
             if entry_descriptor.options and entry_descriptor.options.map_entry then

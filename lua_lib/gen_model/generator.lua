@@ -4,6 +4,8 @@ local model_info = require("gen_model.model_info")
 
 local M = {}
 
+---@param descriptor_set google.protobuf.FileDescriptorSet
+---@param output_dir string
 function M.gen(descriptor_set, output_dir)
     local info = model_info.build_info(descriptor_set)
     M.gen_files(info, output_dir)
@@ -86,6 +88,9 @@ end
     M.gen_fields(info, message_info, output_buf)
 end
 
+---@param info DescriptorSetInfo
+---@param message_info MessageInfo
+---@param output_buf string[]
 function M.gen_fields(info, message_info, output_buf)
     local oneof_index = 0
     for _, field in ipairs(message_info.fields) do

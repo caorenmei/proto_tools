@@ -1,0 +1,21 @@
+local args = require("lua_lib.gen_model.args")
+
+describe("gen_model.args", function()
+    it("正常解析所有参数", function()
+        local result = args.parse({"-d", "/tmp/output", "-f", "/tmp/desc.pb"})
+        assert.are.equal("/tmp/output", result.out_put_dir)
+        assert.are.equal("/tmp/desc.pb", result.descriptor_set_file)
+    end)
+
+    it("缺少必填参数 descriptor_set_file 时抛出错误", function()
+        assert.has_error(function()
+            args.parse({"-d", "/tmp/output"})
+        end, "Descriptor set file is required.")
+    end)
+
+    it("out_put_dir 默认值为 '.'", function()
+        local result = args.parse({"-f", "/tmp/desc.pb"})
+        assert.are.equal(".", result.out_put_dir)
+        assert.are.equal("/tmp/desc.pb", result.descriptor_set_file)
+    end)
+end)

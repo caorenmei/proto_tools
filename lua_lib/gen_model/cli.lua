@@ -3,6 +3,8 @@ local template = require("resty.template")
 
 local M = {}
 
+---@param descriptor_set google.protobuf.FileDescriptorSet
+---@param out_put_dir string
 function M.render_model(descriptor_set, out_put_dir)
     for _, file in ipairs(descriptor_set.file) do
         local model_name = file.name:match("([^/]+)%.proto$")
