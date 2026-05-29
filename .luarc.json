@@ -13,9 +13,10 @@
         
     ],
     "workspace.library": [
-        "src",
-        "tests",
-        "tools",
+        "lua_lib",
+        "lua_tests",
+        "lua_tools",
+        "lua_metas",
         "lua_modules/share/lua/5.5",
         "lua_modules/share/lua/5.4",
         "lua_modules/share/lua/5.3"
