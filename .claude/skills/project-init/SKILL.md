@@ -28,19 +28,36 @@ compatibility: []
 
 按优先级检测系统上可用的 Lua 解释器：
 
+**Unix 平台**（Linux/macOS）：
 ```bash
 # 按顺序检查，使用第一个找到的版本
 which lua5.4 && lua5.4 -v
+which lua54 && lua54 -v
 which lua5.3 && lua5.3 -v
+which lua53 && lua53 -v
 which lua && lua -v
 ```
 
-- **优先级**：`lua5.4` > `lua5.3` > `lua`
+**Windows 平台**：
+```cmd
+where lua5.4
+where lua54
+where lua5.3
+where lua53
+where lua
+lua -v
+```
+
+- **优先级**：`lua5.4` > `lua54` > `lua5.3` > `lua53` > `lua`
 - 如果 `lua` 命令存在但需要确定其版本，运行 `lua -v` 查看
 - 如果以上都未找到，停止并向用户报告：
   > 未检测到 Lua 5.4 或 5.3。请安装 Lua：
   > - Ubuntu/Debian: `sudo apt install lua5.4 luarocks`
   > - macOS: `brew install lua luarocks`
+  > - Windows:
+  >   - 使用 Lua for Windows: https://github.com/rjpcomputing/luaforwindows
+  >   - 或使用 winget: `winget install Lua`（如可用）
+  >   - 或使用 MSYS2: `pacman -S mingw-w64-x86_64-lua`
   > - 其他系统请参考 https://www.lua.org/download.html
 
 ### 2. 检测 rockspec
@@ -71,7 +88,11 @@ ls *.rockspec 2>/dev/null
 ```bash
 # 方案 A：如果 luarocks 支持 init
 luarocks init --lua-version=<detected_version>
+```
 
+> `luarocks init` 会自动生成 `./lua` 和 `./luarocks` 便利脚本。
+
+```bash
 # 方案 B：手动配置本地 tree
 luarocks config --local rocks_trees '{ { name = "user", root = "./lua_modules" } }'
 ```
@@ -96,31 +117,38 @@ luarocks make
 - 确认 `lua_modules/` 目录已创建且包含依赖
 - 如果遇到依赖冲突或版本不兼容，记录具体错误信息并询问用户
 
-### 5. 生成便利脚本
+### 5. 检测 protoc 命令
 
-在项目根目录创建两个便利脚本，参考以下模板（根据实际检测到的 Lua 路径调整）：
+本项目是 protobuf 相关的工具项目，protoc 是核心依赖。运行以下命令检测：
 
-**`./lua`** — 带本地 path 的 Lua REPL：
+**Unix 平台**（Linux/macOS）：
 ```bash
-#!/bin/sh
-exec <detected_lua_path> -e 'package.path="./lua_modules/share/lua/<version>/?.lua;./lua_modules/share/lua/<version>/?/init.lua;"..package.path;package.cpath="./lua_modules/lib/lua/<version>/?.so;"..package.cpath' "$@"
+which protoc && protoc --version
 ```
 
-**`./luarocks`** — 指向本地 tree 的 luarocks：
-```bash
-#!/bin/sh
-exec luarocks --tree ./lua_modules --lua-version=<version> "$@"
+**Windows 平台**：
+```cmd
+where protoc
+protoc --version
 ```
 
-创建后设置执行权限：
-```bash
-chmod +x ./lua ./luarocks
-```
+- 如果 protoc 存在，记录版本号
+- 如果未找到，向用户报告：
+  > ⚠️ 未检测到 `protoc` 命令。本项目是 protobuf 相关的工具项目，缺少 protoc 将无法正常开发运行。
+  > 请安装 protoc：
+  > - Ubuntu/Debian: `sudo apt install protobuf-compiler`
+  > - macOS: `brew install protobuf`
+  > - Windows:
+  >   - 下载预编译二进制: https://github.com/protocolbuffers/protobuf/releases
+  >   - 或使用 Chocolatey: `choco install protoc`
+  >   - 或使用 winget: `winget install Google.Protobuf`
+  > - 其他系统请参考 https://github.com/protocolbuffers/protobuf/releases
 
 ### 6. 验证环境
 
 运行以下验证确保环境可用：
 
+**Unix 平台**（Linux/macOS）：
 ```bash
 # 验证 Lua 能加载本地模块
 ./lua -e "print('Lua OK, version:', _VERSION)"
@@ -133,6 +161,12 @@ chmod +x ./lua ./luarocks
 
 # 尝试运行项目测试（如果有测试目录）
 [ -d "tests" ] && ./luarocks test 2>/dev/null || true
+```
+
+Windows 平台使用 `lua.bat` / `luarocks.bat` 替代 `./lua` / `./luarocks`：
+```cmd
+lua.bat -e "print('Lua OK, version:', _VERSION)"
+luarocks.bat list
 ```
 
 ### 7. 报告结果
@@ -165,7 +199,7 @@ chmod +x ./lua ./luarocks
 
 | 问题 | 处理方案 |
 |------|----------|
-| `luarocks: command not found` | 提示用户安装 luarocks：`sudo apt install luarocks` 或 `brew install luarocks` |
+| `luarocks: command not found` | - Linux: `sudo apt install luarocks` <br> - macOS: `brew install luarocks` <br> - Windows: 下载 https://luarocks.org/releases 或使用 `choco install luarocks` |
 | 依赖安装失败（版本冲突） | 检查 rockspec 中的版本约束是否过严，建议用户调整 |
 | `./lua` 无法加载模块 | 检查 `package.path` 和 `package.cpath` 是否包含 `lua_modules` 路径 |
 | 无 rockspec 且用户拒绝创建 | 仅初始化 LuaRocks 环境，不安装依赖 |
@@ -174,4 +208,4 @@ chmod +x ./lua ./luarocks
 
 - **不要**使用 sudo 安装依赖，所有操作限制在项目目录的 `lua_modules/` 内
 - **不要**修改系统级的 Lua 或 LuaRocks 配置
-- 优先使用项目已有的 `./lua` 或 `./luarocks` 脚本（如果存在），询问用户是否覆盖
+- Windows 平台下注意路径分隔符使用 `/` 或 `\\`，以及 `.dll` 与 `.so` 的区别
