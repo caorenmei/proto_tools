@@ -4,10 +4,11 @@
 
 ## 开发环境
 
-- 使用 `luarocks` 来管理依赖。
-- 使用 `busted` 来进行单元测试。
-- 使用 `superpowers` 来管理开发流程
-- 使用 `EmmyLua` 来进行代码注释、补全和类型检查。
+- **Lua 5.4** — 解释执行，无需编译
+- **LuaRocks** — 本地依赖管理（`lua_modules/`），rockspec: `proto_tools-dev-1.rockspec`
+- **busted** — 单元测试框架
+- **EmmyLua** — 代码注释、补全与类型检查（`.luarc.json`）
+- **便利脚本**：`./lua`（带本地路径的 REPL）、`./luarocks`（本地依赖管理）
 
 ## 开发工作流
 
@@ -17,6 +18,10 @@
   - 详细流程（目录路径、命名规范、分支处理、环境文件拷贝等）见 skill。
 
 ## 测试环境
+
+- **busted** — 测试框架，测试文件以 `*_spec.lua` 命名
+- **目录**：`tests/`，`tests/support/env.lua` 负责环境初始化
+- **运行**：`busted tests/`
 
 ## 语言规范
 

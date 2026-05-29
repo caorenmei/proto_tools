@@ -1,4 +1,4 @@
-package = "gen_model"
+package = "proto_tools"
 version = "dev-1"
 
 source = {
