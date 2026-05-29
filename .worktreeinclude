@@ -1,0 +1,10 @@
+.env
+.env.local
+.claude/
+.vscode/
+.luarocks/
+lua_modules/
+lua
+lua.bat
+luarocks.bat
+luarocks

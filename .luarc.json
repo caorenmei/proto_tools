@@ -1,0 +1,20 @@
+{
+    "Lua.runtime.version": "Lua 5.3",
+    "Lua.runtime.special": {
+        "require": "require",
+        "import": "require"
+    },
+    "Lua.runtime.path": [
+        "?.lua",
+        "?/init.lua",
+        "?.d.lua"
+    ],
+    "workspace.ignoreDir": [
+        "lua/config"
+    ],
+    "workspace.library": [
+        "lua_lib",
+        "lua_scheme",
+        "lua_tests"
+    ]
+}
