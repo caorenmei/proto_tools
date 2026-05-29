@@ -2,6 +2,27 @@
 
 ## 项目概述
 
+`proto_tools` 是一个基于 Lua 的 protobuf 代码生成工具，从 protobuf DescriptorSet 中解析描述符信息，生成对应的 Lua 代码。
+
+## 目录结构
+
+```
+proto_tools/
+├── docs/                    # 项目文档
+│   ├── books/               # 第三方库中文文档
+│   └── specs/               # 功能规格说明
+├── lua_lib/                 # 核心库代码，按功能模块划分子目录
+├── lua_metas/               # 预留：EmmyLua 类型定义
+├── lua_tests/               # 测试代码，测试文件以 `*_spec.lua` 命名
+├── lua_tools/               # Lua 工具脚本
+├── AGENTS.md                # 项目开发规范
+├── CLAUDE.md                # Claude 开发指令
+├── proto_tools-dev-1.rockspec
+├── .luarc.json
+├── lua                      # 便利脚本：Lua REPL
+└── luarocks                 # 便利脚本：LuaRocks 本地管理
+```
+
 ## 开发环境
 
 - **Lua 5.4** — 解释执行，无需编译
@@ -20,8 +41,8 @@
 ## 测试环境
 
 - **busted** — 测试框架，测试文件以 `*_spec.lua` 命名
-- **目录**：`tests/`，`tests/support/env.lua` 负责环境初始化
-- **运行**：`busted tests/`
+- **目录**：`lua_tests/`，`lua_tests/support/env.lua` 负责环境初始化
+- **运行**：`busted lua_tests/`
 
 ## 语言规范
 
