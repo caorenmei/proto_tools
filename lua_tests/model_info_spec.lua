@@ -1,4 +1,4 @@
-local model_info = require("lua_lib.gen_model.model_info")
+local model_info = require("gen_model.model_info")
 
 describe("model_info", function()
     describe("FieldType enum", function()

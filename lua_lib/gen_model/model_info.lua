@@ -1,30 +1,8 @@
----@enum FieldType
-local FieldType = {
-    TYPE_DOUBLE = 1,
-    TYPE_FLOAT = 2,
-    TYPE_INT64 = 3,
-    TYPE_UINT64 = 4,
-    TYPE_INT32 = 5,
-    TYPE_FIXED64 = 6,
-    TYPE_FIXED32 = 7,
-    TYPE_BOOL = 8,
-    TYPE_STRING = 9,
-    TYPE_GROUP = 10,
-    TYPE_MESSAGE = 11,
-    TYPE_BYTES = 12,
-    TYPE_UINT32 = 13,
-    TYPE_ENUM = 14,
-    TYPE_SFIXED32 = 15,
-    TYPE_SFIXED64 = 16,
-    TYPE_SINT32 = 17,
-    TYPE_SINT64 = 18
-}
----@enum FieldLabel
-local FieldLabel = {
-    LABEL_OPTIONAL = 1,
-    LABEL_REQUIRED = 2,
-    LABEL_REPEATED = 3
-}
+local protobuf_descriptor = require("third_party.protobuf_descriptor")
+
+local FieldType = protobuf_descriptor.FieldDescriptorProto_Type
+local FieldLabel = protobuf_descriptor.FieldDescriptorProto_Label
+
 local IntegerTypes = {
     [FieldType.TYPE_INT32] = true,
     [FieldType.TYPE_INT64] = true,
@@ -64,14 +42,14 @@ local EnumTypes = {
 ---@field message string 所在消息的全名
 ---@field name string 字段名
 ---@field index integer 字段在类型中的索引，从 1 开始
----@field type FieldType | string 字段类型，可能是基本类型，也可能是消息类型的全名
+---@field type google.protobuf.FieldDescriptorProto.Type | string 字段类型，可能是基本类型，也可能是消息类型的全名
 ---@field is_repeated boolean 是否是 repeated 字段
 ---@field is_map boolean 是否是 map 字段
 ---@field is_oneof boolean 是否是 oneof 字段
 ---@field oneof_name string oneof 字段名
 ---@field oneof_index integer oneof 字段在 oneof 中的索引，从 1 开始
----@field map_key_type FieldType | 0 map 字段 key 的类型
----@field map_value_type FieldType | string | 0 map 字段 value 的类型，可能是基本类型，也可能是消息类型的全名
+---@field map_key_type google.protobuf.FieldDescriptorProto.Type | 0 map 字段 key 的类型
+---@field map_value_type google.protobuf.FieldDescriptorProto.Type | string | 0 map 字段 value 的类型，可能是基本类型，也可能是消息类型的全名
 ---@field data_index integer 数据在消息中的索引，从 1 开始
 ---@field dirty_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
 
@@ -122,11 +100,12 @@ function M.build_info(descriptor_set)
         enums = {}
     } --[[ @as DescriptorSetInfo ]]
     for _, file in ipairs(descriptor_set.file) do
-        local package_prefix = file.package ~= "" and (file.package .. ".") or ""
+        local package = file.package or ""
+        local package_prefix = package ~= "" and (package .. ".") or ""
         local file_info = {
             descriptor = file,
             name = file.name,
-            package_name = file.package,
+            package_name = package,
             messages = {},
             enums = {}
         } --[[ @as FileInfo ]]

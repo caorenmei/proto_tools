@@ -300,21 +300,18 @@ end
 
 ### 1. 第三方库类型定义（`lua_metas/`）
 
-项目为依赖的 C 库和 protobuf 描述符提供了完整的 EmmyLua 元文件：
+项目为依赖的 C 库和 protobuf 描述符提供了 EmmyLua 元文件，包括：
 
-- **`lua_metas/pb.d.lua`** — 为 `lua-protobuf` 库（`pb`、`pb.slice`、`pb.buffer`、`pb.conv`、`pb.io` 等模块）提供类型定义。使用 `@overload` 注解处理函数的多态签名（如 `pb.encode` 可返回 `string` 或 `pb.Buffer`），使用 `@class` 定义 `pb.Slice`、`pb.Buffer`、`pb.State` 等 userdata 类型。
-
-- **`lua_metas/protobuf_descriptor.lua`** — 为 `google.protobuf.descriptor.proto` 中定义的所有消息类型提供 EmmyLua 类型映射。包括 `FileDescriptorSet`、`DescriptorProto`、`FieldDescriptorProto` 等核心结构，以及 `FieldDescriptorProto.Type`、`FieldDescriptorProto.Label` 等枚举类型。这些定义使得从 `pb.decode("google.protobuf.DescriptorSet", data)` 解码出的 Lua 表可以被正确地进行类型推断和字段补全。
+- **C 库类型封装** — 使用 `@class`、`@overload` 等注解为 `lua-protobuf` 等 C 库的模块、函数及 userdata 类型提供类型签名。
+- **Protobuf 描述符映射** — 将 `google.protobuf.descriptor.proto` 中定义的消息类型和枚举映射为 Lua 类型，使解码后的表具备类型推断和字段补全能力。
 
 ### 2. 项目内部代码（`lua_lib/`）
 
-项目核心库中的模块大量使用 EmmyLua 注解：
+核心库各模块均使用 EmmyLua 注解提升可维护性：
 
-- **`lua_lib/gen_model/model_info.lua`** — 使用 `@class` 定义了 `DescriptorSetInfo`、`FileInfo`、`MessageInfo`、`FieldInfo`、`OneofInfo`、`EnumInfo` 等内部数据结构；使用 `@package` 访问修饰符限制这些类型仅在包内使用；使用 `@param` 和 `@return` 为 `build_info`、`build_message_info`、`build_enum_info` 等函数提供完整的类型签名。
-
-- **`lua_lib/gen_model/generator.lua`** — 为代码生成器的各个函数（`gen_files`、`gen_file`、`gen_enum`、`gen_message`、`gen_fields` 等）标注参数类型，参数类型引用了 `model_info.lua` 中定义的类（如 `DescriptorSetInfo`、`MessageInfo`、`FieldInfo`）。
-
-- **`lua_lib/gen_model/args.lua`** — 使用 `@param` 和 `@return` 为命令行参数解析函数提供类型信息，返回类型使用内联表类型注解 `{out_put_dir: string, descriptor_set_file: string}`。
+- **内部数据结构** — 使用 `@class` 定义描述符、消息、字段、枚举等模型类型，配合 `@package` 控制可见范围。
+- **函数签名** — 使用 `@param`、`@return` 为构建函数、生成函数、参数解析函数等提供完整类型签名。
+- **类型引用** — 模块间通过类型注解建立引用关系，确保 IDE 能正确追踪跨模块的类型依赖。
 
 ### 3. 配置支持（`.luarc.json`）
 

@@ -1,4 +1,4 @@
-local args = require("lua_lib.gen_model.args")
+local args = require("gen_model.args")
 
 describe("gen_model.args", function()
     it("正常解析所有参数", function()
