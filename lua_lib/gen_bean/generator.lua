@@ -1,6 +1,6 @@
 
 local template = require("resty.template")
-local model_info = require("gen_model.model_info")
+local model_info = require("gen_bean.bean_info")
 
 local M = {}
 
@@ -10,7 +10,7 @@ function M.gen(descriptor_set, output_dir)
     local info = model_info.build_info(descriptor_set)
     M.gen_files(info, output_dir)
 end
----@param info DescriptorSetInfo
+---@param info gen_bean.DescriptorSetInfo
 ---@param output_dir string 输出目录
 function M.gen_files(info, output_dir)
     for _, file in ipairs(info.files) do
@@ -18,8 +18,8 @@ function M.gen_files(info, output_dir)
     end
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
 ---@param output_dir string 输出目录
 function M.gen_file(info, file_info, output_dir)
     local file_descriptor = file_info.descriptor
@@ -46,8 +46,8 @@ function M.gen_file(info, file_info, output_dir)
     f:close()
 end
 
----@param info DescriptorSetInfo
----@param enum_info EnumInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param enum_info gen_bean.EnumInfo
 ---@param output_buf string[]
 function M.gen_enum(info, enum_info, output_buf)
     local template_str = [[
@@ -66,8 +66,8 @@ M.<*enum_info.name*> = {
     end)
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
 ---@param output_buf string[]
 function M.gen_message(info, message_info, output_buf)
     local begin_template =[[
@@ -88,8 +88,8 @@ end
     M.gen_fields(info, message_info, output_buf)
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
 ---@param output_buf string[]
 function M.gen_fields(info, message_info, output_buf)
     local oneof_index = 0
@@ -111,66 +111,66 @@ function M.gen_fields(info, message_info, output_buf)
     end
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_map(info, message_info, field_info, output_buf)
     
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_message_map(info, message_info, field_info, output_buf)
     
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_dirty_map(info, message_info, field_info, output_buf)
     
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_dirty_message_map(info, message_info, field_info, output_buf)
     
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_repeated(info, message_info, field_info, output_buf)
 
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_field(info, message_info, field_info, output_buf)
 
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param oneof_info OneofInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param oneof_info gen_bean.OneofInfo
 ---@param output_buf string[]
 function M.gen_oneof(info, message_info, oneof_info, output_buf)
     
 end
 
----@param info DescriptorSetInfo
----@param message_info MessageInfo
----@param oneof_info OneofInfo
----@param field_info FieldInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param message_info gen_bean.MessageInfo
+---@param oneof_info gen_bean.OneofInfo
+---@param field_info gen_bean.FieldInfo
 ---@param output_buf string[]
 function M.gen_oneof_field(info, message_info, oneof_info, field_info, output_buf)
 

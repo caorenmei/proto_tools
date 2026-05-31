@@ -6,7 +6,7 @@ describe("parse_descriptor_set", function()
         -- 加载测试环境（设置搜索路径并预加载 protobuf 类型定义）
         dofile("lua_tests/support/env.lua")
 
-        parse_descriptor_set = require("gen_model.parse_descriptor_set")
+        parse_descriptor_set = require("gen_bean.parse_descriptor_set")
         fixture_dir = "lua_tests/fixtures/protoc/"
     end)
 

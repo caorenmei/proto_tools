@@ -27,17 +27,16 @@ local EnumTypes = {
     [FieldType.TYPE_ENUM] = true
 }
 
----@package
----@class OneofInfo
+---@class gen_bean.OneofInfo
 ---@field descriptor table oneof 字段描述符
 ---@field message string 所在消息的全名
 ---@field name string oneof 字段名
 ---@field index integer oneof 在消息中的索引，从 1 开始
----@field data_index integer 数据在消息中的索引，从 1 开始
 ---@field dirty_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
+---@field dirty_data_index integer 脏消息数据在消息中的索引，从 1 开始
+---@field plain_data_index integer 普通消息数据在消息中的索引，从 1 开始
 
----@package
----@class FieldInfo
+---@class gen_bean.FieldInfo
 ---@field descriptor table 字段描述符
 ---@field message string 所在消息的全名
 ---@field name string 字段名
@@ -50,22 +49,21 @@ local EnumTypes = {
 ---@field oneof_index integer oneof 字段在 oneof 中的索引，从 1 开始
 ---@field map_key_type google.protobuf.FieldDescriptorProto.Type | 0 map 字段 key 的类型
 ---@field map_value_type google.protobuf.FieldDescriptorProto.Type | string | 0 map 字段 value 的类型，可能是基本类型，也可能是消息类型的全名
----@field data_index integer 数据在消息中的索引，从 1 开始
 ---@field dirty_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
+---@field dirty_data_index integer 脏消息数据在消息中的索引，从 1 开始
+---@field plain_data_index integer 普通消息数据在消息中的索引，从 1 开始
 
----@package
----@class MessageInfo
+---@class gen_bean.MessageInfo
 ---@field descriptor table 消息描述符
 ---@field file string 消息所在文件的全名
 ---@field name string 消息名
 ---@field full_name string 消息的全名，嵌套消息部分以 "_" 分隔，例如 "package.Message_NestedMessage"
 ---@field full_name_dot string 消息的全名，嵌套消息部分以 "." 分隔，例如 "package.Message.NestedMessage"
----@field fields FieldInfo[] 字段列表
----@field oneofs OneofInfo[] oneof 字段列表
+---@field fields gen_bean.FieldInfo[] 字段列表
+---@field oneofs gen_bean.OneofInfo[] oneof 字段列表
 ---@field has_dirty_fields boolean 是否有脏字段
 
----@package
----@class EnumInfo
+---@class gen_bean.EnumInfo
 ---@field descriptor table 枚举描述符
 ---@field file string 枚举所在文件的全名
 ---@field name string 枚举名
@@ -73,32 +71,30 @@ local EnumTypes = {
 ---@field full_name_dot string 枚举的全名，嵌套枚举部分以 "." 分隔，例如 "package.Enum.NestedEnum"
 ---@field values { key: string, value: integer }[] 枚举值列表，key 是枚举值名，value 是枚举值编号
 
----@package
----@class FileInfo
+---@class gen_bean.FileInfo
 ---@field descriptor table 文件描述符
 ---@field name string 文件名
 ---@field package_name string 包名
----@field messages MessageInfo[] 消息列表
----@field enums EnumInfo[] 枚举列表
+---@field messages gen_bean.MessageInfo[] 消息列表
+---@field enums gen_bean.EnumInfo[] 枚举列表
 
----@package
----@class DescriptorSetInfo
+---@class gen_bean.DescriptorSetInfo
 ---@field descriptor_set table 描述符集合
----@field files table<string, FileInfo> 文件列表
----@field messages table<string, MessageInfo> 消息列表，key 是消息的全名
----@field enums table<string, EnumInfo> 枚举列表，key 是枚举的全名
+---@field files table<string, gen_bean.FileInfo> 文件列表
+---@field messages table<string, gen_bean.MessageInfo> 消息列表，key 是消息的全名
+---@field enums table<string, gen_bean.EnumInfo> 枚举列表，key 是枚举的全名
 
 local M = {}
 
 ---@param descriptor_set google.protobuf.FileDescriptorSet
----@return DescriptorSetInfo
+---@return gen_bean.DescriptorSetInfo
 function M.build_info(descriptor_set)
     local info = {
         descriptor_set = descriptor_set,
         files = {},
         messages = {},
         enums = {}
-    } --[[ @as DescriptorSetInfo ]]
+    } --[[ @as gen_bean.DescriptorSetInfo ]]
     for _, file in ipairs(descriptor_set.file) do
         local package = file.package or ""
         local package_prefix = package ~= "" and (package .. ".") or ""
@@ -108,7 +104,7 @@ function M.build_info(descriptor_set)
             package_name = package,
             messages = {},
             enums = {}
-        } --[[ @as FileInfo ]]
+        } --[[ @as gen_bean.FileInfo ]]
         info.files[file.name] = file_info
 
         for _, enum in ipairs(file.enum_type) do
@@ -122,8 +118,8 @@ function M.build_info(descriptor_set)
     return info
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
 ---@param message table 消息描述符
 ---@param name_prefix string 父消息的全名，顶层消息为包名
 ---@param name_prefix_dot string 父消息的全名，顶层消息为包名，使用 "." 分隔
@@ -139,7 +135,7 @@ function M.build_message_info(info, file_info, message, name_prefix, name_prefix
         fields = {},
         oneofs = {},
         has_dirty_fields = false,
-    } --[[ @as MessageInfo ]]
+    } --[[ @as gen_bean.MessageInfo ]]
     info.messages[full_name] = message_info
     info.messages[full_name_dot] = message_info
     table.insert(file_info.messages, message_info)
@@ -160,8 +156,8 @@ function M.build_message_info(info, file_info, message, name_prefix, name_prefix
     end
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
 ---@param enum table 枚举描述符
 ---@param name_prefix string 父消息的全名，顶层消息为包名
 ---@param name_prefix_dot string 父消息的全名，顶层消息为包名，使用 "." 分隔
@@ -175,7 +171,7 @@ function M.build_enum_info(info, file_info, enum, name_prefix, name_prefix_dot)
         full_name = full_name,
         full_name_dot = full_name_dot,
         values = {}
-    } --[[ @as EnumInfo ]]
+    } --[[ @as gen_bean.EnumInfo ]]
     info.enums[full_name] = enum_info
     info.enums[full_name_dot] = enum_info
     table.insert(file_info.enums, enum_info)
@@ -185,9 +181,9 @@ function M.build_enum_info(info, file_info, enum, name_prefix, name_prefix_dot)
     end
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
----@param message_info MessageInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
+---@param message_info gen_bean.MessageInfo
 ---@param oneof table oneof 字段描述符
 ---@param index integer oneof 在消息中的索引，从 1 开始
 function M.build_oneof_info(info, file_info, message_info, oneof, index)
@@ -196,15 +192,16 @@ function M.build_oneof_info(info, file_info, message_info, oneof, index)
         message = message_info.full_name,
         name = oneof.name,
         index = index,
-        data_index = 0,
-        dirty_index = 0 -- 初始时没有脏字段
-    } --[[ @as OneofInfo ]]
+        dirty_index = 0, -- 初始时没有脏字段
+        dirty_data_index = 0,
+        plain_data_index = 0,
+    } --[[ @as gen_bean.OneofInfo ]]
     table.insert(message_info.oneofs, oneof_info)
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
----@param message_info MessageInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
+---@param message_info gen_bean.MessageInfo
 ---@param field table 字段描述符
 ---@param index integer 字段在消息中的索引，从 1 开始
 function M.build_field_info(info, file_info, message_info, field, index)
@@ -225,15 +222,16 @@ function M.build_field_info(info, file_info, message_info, field, index)
         oneof_index = field.oneof_index and (field.oneof_index + 1) or 0,
         map_key_type = 0,
         map_value_type = 0,
-        data_index = 0,
-        dirty_index = 0 -- 初始时没有脏字段
-    } --[[ @as FieldInfo ]]
+        dirty_index = 0, -- 初始时没有脏字段
+        dirty_data_index = 0,
+        plain_data_index = 0,
+    } --[[ @as gen_bean.FieldInfo ]]
     table.insert(message_info.fields, field_info)
 end
 
----@param info DescriptorSetInfo
----@param file_info FileInfo
----@param message_info MessageInfo
+---@param info gen_bean.DescriptorSetInfo
+---@param file_info gen_bean.FileInfo
+---@param message_info gen_bean.MessageInfo
 function M.process_fields(info, file_info, message_info)
     local message_descriptor = message_info.descriptor
     local is_dirty_message = not (message_descriptor.options and message_descriptor.options.level == 0)
@@ -289,28 +287,37 @@ function M.process_fields(info, file_info, message_info)
     message_info.has_dirty_fields = dirty_index > 0
     -- 计算数据索引
     -- 如果有脏字段，第一个Item为父消息，第二个Item为父消息Key，第三个Item的前16为父消息脏字段,后48为本消息的部分脏字段
-    local data_index = 0
-    if dirty_index > 0 then
-        data_index = 3 + (dirty_index > 48 and math.floor((dirty_index - 48) / 64) or 0)
+    -- 如果没有脏字段，第一个Item为父消息，第二个Item为父消息Key，第三个Item的前16为父消息脏字段,第17位表示本消息是否有修改
+    local dirty_data_index = 3
+    if dirty_index > 48 then
+        dirty_data_index = 3 + math.ceil((dirty_index - 48) / 64)
     end
+    local plain_data_index = 0
     -- map 需要占用2个数据索引，1个存储 map 的长度，1个存储 map 的数据
     -- oneof 需要占用2个数据索引，1个存储 当前字段，1个存储 当前字段的数据
     local oneof_index = 0
     for _, field in ipairs(message_info.fields) do
         if field.is_map then
-            field.data_index = data_index + 1
-            data_index = data_index + 2
+            field.dirty_data_index = dirty_data_index + 1
+            field.plain_data_index = plain_data_index + 1
+            dirty_data_index = dirty_data_index + 2
+            plain_data_index = plain_data_index + 2
         elseif field.is_oneof then
             local oneof_info = message_info.oneofs[field.oneof_index]
             if oneof_index ~= field.oneof_index then
                 oneof_index = field.oneof_index
-                oneof_info.data_index = data_index + 1
-                data_index = data_index + 2
+                oneof_info.dirty_data_index = dirty_data_index + 1
+                oneof_info.plain_data_index = plain_data_index + 1
+                dirty_data_index = dirty_data_index + 2
+                plain_data_index = plain_data_index + 2
             end
-            field.data_index = oneof_info.data_index
+            field.dirty_data_index = oneof_info.dirty_data_index
+            field.plain_data_index = oneof_info.plain_data_index
         else
-            field.data_index = data_index + 1
-            data_index = data_index + 1
+            field.dirty_data_index = dirty_data_index + 1
+            field.plain_data_index = plain_data_index + 1
+            dirty_data_index = dirty_data_index + 1
+            plain_data_index = plain_data_index + 1
         end
     end
 end
