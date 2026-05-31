@@ -32,9 +32,8 @@ local EnumTypes = {
 ---@field message string 所在消息的全名
 ---@field name string oneof 字段名
 ---@field index integer oneof 在消息中的索引，从 1 开始
----@field dirty_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
----@field dirty_data_index integer 脏消息数据在消息中的索引，从 1 开始
----@field plain_data_index integer 普通消息数据在消息中的索引，从 1 开始
+---@field track_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
+---@field data_index integer 普通消息数据在消息中的索引，从 1 开始
 
 ---@class gen_bean.FieldInfo
 ---@field descriptor table 字段描述符
@@ -47,11 +46,11 @@ local EnumTypes = {
 ---@field is_oneof boolean 是否是 oneof 字段
 ---@field oneof_name string oneof 字段名
 ---@field oneof_index integer oneof 字段在 oneof 中的索引，从 1 开始
+---@field oneof_data_index integer 字段在 oneof 中的编号，第一个位表示是否是 message 类型，后面连续的编号表示同一个 oneof 中的字段索引，从 1 开始
 ---@field map_key_type google.protobuf.FieldDescriptorProto.Type | 0 map 字段 key 的类型
 ---@field map_value_type google.protobuf.FieldDescriptorProto.Type | string | 0 map 字段 value 的类型，可能是基本类型，也可能是消息类型的全名
----@field dirty_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
----@field dirty_data_index integer 脏消息数据在消息中的索引，从 1 开始
----@field plain_data_index integer 普通消息数据在消息中的索引，从 1 开始
+---@field track_index integer 脏字段编号，使用位运算来标识脏字段，从 1 开始
+---@field data_index integer 普通消息数据在消息中的索引，从 1 开始
 
 ---@class gen_bean.MessageInfo
 ---@field descriptor table 消息描述符
@@ -61,7 +60,8 @@ local EnumTypes = {
 ---@field full_name_dot string 消息的全名，嵌套消息部分以 "." 分隔，例如 "package.Message.NestedMessage"
 ---@field fields gen_bean.FieldInfo[] 字段列表
 ---@field oneofs gen_bean.OneofInfo[] oneof 字段列表
----@field has_dirty_fields boolean 是否有脏字段
+---@field track_field_count integer 脏字段数量
+---@field track_words integer 需要多少个 64 位整数来存储脏字段的位标记，等于 math.ceil(track_field_count / 64)
 
 ---@class gen_bean.EnumInfo
 ---@field descriptor table 枚举描述符
@@ -134,7 +134,8 @@ function M.build_message_info(info, file_info, message, name_prefix, name_prefix
         full_name_dot = full_name_dot,
         fields = {},
         oneofs = {},
-        has_dirty_fields = false,
+        track_field_count = 0,
+        track_words = 0,
     } --[[ @as gen_bean.MessageInfo ]]
     info.messages[full_name] = message_info
     info.messages[full_name_dot] = message_info
@@ -192,9 +193,9 @@ function M.build_oneof_info(info, file_info, message_info, oneof, index)
         message = message_info.full_name,
         name = oneof.name,
         index = index,
-        dirty_index = 0, -- 初始时没有脏字段
-        dirty_data_index = 0,
-        plain_data_index = 0,
+        track_index = 0, -- 初始时没有脏字段
+        track_data_index = 0,
+        data_index = 0,
     } --[[ @as gen_bean.OneofInfo ]]
     table.insert(message_info.oneofs, oneof_info)
 end
@@ -220,11 +221,12 @@ function M.build_field_info(info, file_info, message_info, field, index)
         is_oneof = field.oneof_index ~= nil,
         oneof_name = "",
         oneof_index = field.oneof_index and (field.oneof_index + 1) or 0,
+        oneof_data_index = 0,
         map_key_type = 0,
         map_value_type = 0,
-        dirty_index = 0, -- 初始时没有脏字段
-        dirty_data_index = 0,
-        plain_data_index = 0,
+        track_index = 0, -- 初始时没有脏字段
+        track_data_index = 0,
+        data_index = 0,
     } --[[ @as gen_bean.FieldInfo ]]
     table.insert(message_info.fields, field_info)
 end
@@ -234,7 +236,7 @@ end
 ---@param message_info gen_bean.MessageInfo
 function M.process_fields(info, file_info, message_info)
     local message_descriptor = message_info.descriptor
-    local is_dirty_message = not (message_descriptor.options and message_descriptor.options.level == 0)
+    local is_track_message = not (message_descriptor.options and message_descriptor.options.level == 0)
 
     for _, field in ipairs(message_info.fields) do
         local field_descriptor = field.descriptor
@@ -258,66 +260,58 @@ function M.process_fields(info, file_info, message_info)
             end
         end
         -- 处理脏字段
-        if is_dirty_message and not (field_descriptor.options and field_descriptor.options.transient) then
-            field.dirty_index = 1
+        if is_track_message and not (field_descriptor.options and field_descriptor.options.transient) then
+            field.track_index = 1
         end
     end
-    -- 调整 dirty_index
-    local dirty_index = 0
+    -- 调整 track_index
+    local track_index = 0
     for _, field in ipairs(message_info.fields) do
         if field.oneof_index > 0 then
-            if field.dirty_index > 0 then
+            if field.track_index > 0 then
                 local oneof_info = message_info.oneofs[field.oneof_index]
-                if oneof_info.dirty_index == 0 then
-                    dirty_index = dirty_index + 1
-                    oneof_info.dirty_index = dirty_index
+                if oneof_info.track_index == 0 then
+                    track_index = track_index + 1
+                    oneof_info.track_index = track_index
                 end
             end
-        elseif field.dirty_index > 0 then
-            dirty_index = dirty_index + 1
-            field.dirty_index = dirty_index
+        elseif field.track_index > 0 then
+            track_index = track_index + 1
+            field.track_index = track_index
         end
     end
     for _, field in ipairs(message_info.fields) do
         if field.oneof_index > 0 then
             local oneof_info = message_info.oneofs[field.oneof_index]
-            field.dirty_index = oneof_info.dirty_index
+            field.track_index = oneof_info.track_index
         end
     end
-    message_info.has_dirty_fields = dirty_index > 0
-    -- 计算数据索引
-    -- 如果有脏字段，第一个Item为父消息，第二个Item为父消息Key，第三个Item的前16为父消息脏字段,后48为本消息的部分脏字段
-    -- 如果没有脏字段，第一个Item为父消息，第二个Item为父消息Key，第三个Item的前16为父消息脏字段,第17位表示本消息是否有修改
-    local dirty_data_index = 3
-    if dirty_index > 48 then
-        dirty_data_index = 3 + math.ceil((dirty_index - 48) / 64)
-    end
-    local plain_data_index = 0
+    message_info.track_field_count = track_index
+    message_info.track_words = math.ceil(track_index / 64)
+    -- 如果有脏字段，通过第一个Item来通知父消息有修改
     -- map 需要占用2个数据索引，1个存储 map 的长度，1个存储 map 的数据
     -- oneof 需要占用2个数据索引，1个存储 当前字段，1个存储 当前字段的数据
+    local data_index = 0
     local oneof_index = 0
+    local oneof_data_index = 0
     for _, field in ipairs(message_info.fields) do
         if field.is_map then
-            field.dirty_data_index = dirty_data_index + 1
-            field.plain_data_index = plain_data_index + 1
-            dirty_data_index = dirty_data_index + 2
-            plain_data_index = plain_data_index + 2
+            field.data_index = data_index + 1
+            data_index = data_index + 2
         elseif field.is_oneof then
             local oneof_info = message_info.oneofs[field.oneof_index]
             if oneof_index ~= field.oneof_index then
                 oneof_index = field.oneof_index
-                oneof_info.dirty_data_index = dirty_data_index + 1
-                oneof_info.plain_data_index = plain_data_index + 1
-                dirty_data_index = dirty_data_index + 2
-                plain_data_index = plain_data_index + 2
+                oneof_data_index = 0
+                oneof_info.data_index = data_index + 1
+                data_index = data_index + 2
             end
-            field.dirty_data_index = oneof_info.dirty_data_index
-            field.plain_data_index = oneof_info.plain_data_index
+            oneof_data_index = oneof_data_index + 1
+            field.oneof_data_index = (oneof_data_index << 1) + (type(field.type) == "string" and 1 or 0)
+            field.data_index = oneof_info.data_index
         else
-            field.dirty_data_index = dirty_data_index + 1
-            field.plain_data_index = plain_data_index + 1
-            dirty_data_index = dirty_data_index + 1
-            plain_data_index = plain_data_index + 1
+            field.data_index = data_index + 1
+            data_index = data_index + 1
         end
     end
 end
