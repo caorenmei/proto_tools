@@ -301,7 +301,7 @@ end
 ---@param value ValueType
 ---@param assertion fun(value: ValueType)
 function M.set_oneof_field(self, track_words, track_index, data_index, track_maps, oneof_index, value, assertion)
-    local old_index = self[data_index] --[[@as integer ]]
+    local old_index = self[data_index] --[[@as integer]]
     local old_value = self[data_index + 1]
     if old_index == oneof_index and old_value == value then
         return false
@@ -331,7 +331,7 @@ end
 ---@param constructor fun(): MessageType
 ---@return MessageType
 function M.add_oneof_message(self, track_words, track_index, data_index, track_maps, oneof_index, constructor)
-    local index = self[data_index] --[[@as integer ]]
+    local index = self[data_index] --[[@as integer]]
     local value = self[data_index + 1]
     if index == oneof_index and value then
         return value
@@ -348,11 +348,11 @@ end
 ---@param data_index integer
 ---@param track_maps table
 function M.clear_oneof_field(self, track_words, track_index, data_index, track_maps)
-    local old_index = self[data_index] --[[@as integer ]]
+    local old_index = self[data_index] --[[@as integer]]
     if old_index == 0 then
         return
     end
-    local old_value = self[data_index + 1] --[[@as any? ]]
+    local old_value = self[data_index + 1] --[[@as any | false]]
     if (old_index & 1) == 1 then
         old_value[1] = false
     end
@@ -371,7 +371,7 @@ end
 ---@param assertion fun(value: ValueType)
 function M.add_repeated_value(self, track_words, track_index, data_index, track_maps, value, assertion)
     assertion(value)
-    local list = self[data_index] --[[@as any[]? ]]
+    local list = self[data_index] --[=[@as any[]?]=]
     if not list then
         list = {}
         self[data_index] = list
@@ -391,7 +391,7 @@ end
 ---@param assertion fun(value: ValueType)
 function M.set_repeated_value(self, track_words, track_index, data_index, track_maps, value_index, value, assertion)
     assertion(value)
-    local list = self[data_index] --[[@as any[] ]]
+    local list = self[data_index] --[=[@as any[]]=]
     assert(list and value_index >= 1 and value_index <= #list, "index out of range")
     list[value_index] = value
     track_map_update(self, track_words, track_index, track_maps, list, value_index, true)
@@ -404,7 +404,7 @@ end
 ---@param track_maps table
 ---@return any?
 function M.pop_repeated_value(self, track_words, track_index, data_index, track_maps)
-    local list = self[data_index] --[[@as any[]? ]]
+    local list = self[data_index] --[=[@as any[]?]=]
     if not list then
         return nil
     end
@@ -412,7 +412,6 @@ function M.pop_repeated_value(self, track_words, track_index, data_index, track_
     if length == 0 then
         return nil
     end
-    assert(length > 0, "list is empty")
     local value = list[length]
     list[length] = nil
     track_map_remove(self, track_words, track_index, track_maps, list, length)
@@ -425,7 +424,7 @@ end
 ---@param data_index integer
 ---@param track_maps table
 function M.clear_repeated_value(self, track_words, track_index, data_index, track_maps)
-    local list = self[data_index] --[[@as any[]? ]]
+    local list = self[data_index] --[=[@as any[]?]=]
     if not list then
         return
     end
@@ -472,7 +471,7 @@ end
 ---@param data_index integer
 ---@param track_maps table
 function M.clear_repeated_message(self, track_words, track_index, data_index, track_maps)
-    local list = self[data_index] --[[@as any[]? ]]
+    local list = self[data_index] --[=[@as any[]?]=]
     if list then
         for _, value in ipairs(list) do
             value[1] = false
@@ -493,7 +492,7 @@ end
 ---@param assertion fun(key: KeyType, value: ValueType)
 function M.set_map_value(self, track_words, track_index, data_index, track_maps, key, value, assertion)
     assertion(key, value)
-    local length = self[data_index] --[[@as integer ]]
+    local length = self[data_index] --[[@as integer]]
     local map = self[data_index + 1]
     if not map then
         map = {}
@@ -520,7 +519,7 @@ end
 ---@param key KeyType
 ---@return ValueType?
 function M.remove_map_key(self, track_words, track_index, data_index, track_maps, key)
-    local length = self[data_index] --[[@as integer ]]
+    local length = self[data_index] --[[@as integer]]
     local map = self[data_index + 1]
     if not map then
         return
@@ -542,8 +541,8 @@ end
 ---@param data_index integer
 ---@param track_maps table
 function M.clear_map(self, track_words, track_index, data_index, track_maps)
-    local length = self[data_index] --[[@as integer ]]
-    local map = self[data_index + 1] --[[@as table | false ]]
+    local length = self[data_index] --[[@as integer]]
+    local map = self[data_index + 1] --[[@as table | false]]
     if not map or length == 0 then
         return
     end
@@ -562,7 +561,7 @@ end
 ---@param constructor fun(): MessageType
 ---@return MessageType
 function M.add_map_message(self, track_words, track_index, data_index, track_maps, key, constructor)
-    local length = self[data_index] --[[@as integer ]]
+    local length = self[data_index] --[[@as integer]]
     local map = self[data_index + 1]
     if not map then
         map = {}
@@ -604,7 +603,7 @@ end
 ---@param data_index integer
 ---@param track_maps table
 function M.clear_map_message(self, track_words, track_index, data_index, track_maps)
-    local map = self[data_index + 1] --[[@as table | false ]]
+    local map = self[data_index + 1] --[[@as table | false]]
     if map then
         for _, value in pairs(map) do
             value[1] = false
