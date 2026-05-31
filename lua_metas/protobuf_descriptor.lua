@@ -1,4 +1,4 @@
---- google.protobuf.descriptor.proto 的 EmmyLua 类型定义
+--- google.protobuf.descriptor.proto 的 LuaCATS 类型定义
 ---@meta
 
 ---@class google.protobuf.FileDescriptorSet

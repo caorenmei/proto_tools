@@ -12,7 +12,7 @@ proto_tools/
 │   ├── books/               # 第三方库中文文档
 │   └── specs/               # 功能规格说明
 ├── lua_lib/                 # 核心库代码，按功能模块划分子目录
-├── lua_metas/               # 预留：EmmyLua 类型定义
+├── lua_metas/               # 预留：LuaCATS 类型定义
 ├── lua_tests/               # 测试代码，测试文件以 `*_spec.lua` 命名
 ├── lua_tools/               # Lua 工具脚本
 ├── AGENTS.md                # 项目开发规范
@@ -28,7 +28,7 @@ proto_tools/
 - **Lua 5.4** — 解释执行，无需编译
 - **LuaRocks** — 本地依赖管理（`lua_modules/`），rockspec: `proto_tools-dev-1.rockspec`
 - **busted** — 单元测试框架
-- **EmmyLua** — 代码注释、补全与类型检查（`.luarc.json`）
+- **LuaLs** — Lua 语言服务器（`.luarc.json`），提供代码补全、诊断、格式化、类型注释等功能，类型注释参考 @docs/books/luals-annotations.md
 - **便利脚本**：`./lua`（带本地路径的 REPL）、`./luarocks`（本地依赖管理）
 
 ## 开发工作流

@@ -1,4 +1,4 @@
---- lua-protobuf 库的 EmmyLua 类型定义
+--- lua-protobuf 库的 LuaCATS 类型定义
 --- 参考: https://github.com/starwing/lua-protobuf
 ---@meta
 
