@@ -194,7 +194,6 @@ function M.build_oneof_info(info, file_info, message_info, oneof, index)
         name = oneof.name,
         index = index,
         track_index = 0, -- 初始时没有脏字段
-        track_data_index = 0,
         data_index = 0,
     } --[[ @as gen_bean.OneofInfo ]]
     table.insert(message_info.oneofs, oneof_info)
@@ -225,7 +224,6 @@ function M.build_field_info(info, file_info, message_info, field, index)
         map_key_type = 0,
         map_value_type = 0,
         track_index = 0, -- 初始时没有脏字段
-        track_data_index = 0,
         data_index = 0,
     } --[[ @as gen_bean.FieldInfo ]]
     table.insert(message_info.fields, field_info)
