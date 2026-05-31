@@ -572,7 +572,7 @@ function M.add_map_message(self, track_words, track_index, data_index, track_map
         return value
     end
     local new_value = constructor()
-    new_value[1] = create_track_map_message(self, track_words, track_index, track_maps, key)
+    new_value[1] = create_track_map_message(self, track_words, track_index, track_maps, map, key)
     map[key] = new_value
     length = length + 1
     self[data_index] = length
