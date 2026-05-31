@@ -270,6 +270,7 @@ function M.set_field(self, track_words, track_index, data_index, value, assertio
     assertion(value)
     self[data_index] = value
     set_track_bit(self, track_words, track_index, true)
+    return true
 end
 
 ---@generic MessageType
