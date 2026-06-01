@@ -1,9 +1,13 @@
 describe("bean_info", function()
     local bean_info
+    local db
+    local pf
 
     setup(function()
         dofile("lua_tests/support/env.lua")
         bean_info = require("gen_bean.bean_info")
+        db = require("fixtures.bean_info.descriptor_builder")
+        pf = require("fixtures.bean_info.preset_fixtures")
     end)
 
     describe("模块可加载性", function()
@@ -895,698 +899,162 @@ describe("bean_info", function()
         end)
     end)
 
-    describe("可追踪消息递归排除", function()
-        it("场景1：基本可追踪性判断", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "EmptyInner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "ScalarOnly",
-                                field = {
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "NestedA",
-                                field = {
-                                    { name = "empty", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "NestedB",
-                                field = {
-                                    { name = "scalar", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ScalarOnly" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
+    describe("validate_track_references 错误检测", function()
+        it("普通字段引用 non-trackable 消息时报错", function()
+            local ds = pf.empty_inner_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end, "track field 'empty_field' in message 'demo.Root' references non-trackable message 'demo.EmptyInner'")
+        end)
 
-            local info = bean_info.build_info(descriptor_set)
+        it("map value 引用 non-trackable 消息时报错", function()
+            local ds = pf.map_value_nontrackable_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+
+        it("循环引用时报错", function()
+            local ds = pf.cycle_reference_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+
+        it("oneof 字段引用 non-trackable 消息时报错", function()
+            local ds = pf.oneof_nontrackable_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+
+        it("自引用消息时报错", function()
+            local ds = pf.self_reference_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+
+        it("多级嵌套 non-trackable 时报错", function()
+            local ds = pf.nested_nontrackable_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+
+        it("repeated 消息字段引用 non-trackable 时报错", function()
+            local ds = pf.repeated_nontrackable_scenario()
+            assert.has_error(function()
+                bean_info.build_info(ds)
+            end)
+        end)
+    end)
+
+    describe("compute_trackable_states 正确性", function()
+        it("正确标记消息可追踪性", function()
+            -- 手动构建 info 并调用 compute_trackable_states，避免触发 validate_track_references
+            local info = { files = {}, messages = {} }
+            local file_info = { name = "test.proto", messages = {}, enums = {} }
+            info.files["test.proto"] = file_info
+
+            -- EmptyInner: 空消息，level=1
+            bean_info.build_message_info(info, file_info, {
+                name = "EmptyInner", field = {}, oneof_decl = {}, enum_type = {}, nested_type = {}, options = { level = 1 }
+            }, "demo.", "demo.")
+            -- ScalarOnly: 有标量字段，level=1
+            bean_info.build_message_info(info, file_info, {
+                name = "ScalarOnly", field = {
+                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL }
+                }, oneof_decl = {}, enum_type = {}, nested_type = {}, options = { level = 1 }
+            }, "demo.", "demo.")
+            -- NestedA: 引用 EmptyInner，level=1
+            bean_info.build_message_info(info, file_info, {
+                name = "NestedA", field = {
+                    { name = "empty", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" }
+                }, oneof_decl = {}, enum_type = {}, nested_type = {}, options = { level = 1 }
+            }, "demo.", "demo.")
+            -- NestedB: 引用 ScalarOnly，level=1
+            bean_info.build_message_info(info, file_info, {
+                name = "NestedB", field = {
+                    { name = "scalar", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ScalarOnly" }
+                }, oneof_decl = {}, enum_type = {}, nested_type = {}, options = { level = 1 }
+            }, "demo.", "demo.")
+
+            bean_info.compute_trackable_states(info)
 
             assert.are.equal("non-trackable", info.messages["demo.EmptyInner"].trackable_state)
             assert.are.equal("trackable", info.messages["demo.ScalarOnly"].trackable_state)
             assert.are.equal("non-trackable", info.messages["demo.NestedA"].trackable_state)
             assert.are.equal("trackable", info.messages["demo.NestedB"].trackable_state)
         end)
+    end)
 
-        it("场景2：Root 消息中的 track_index 分配", function()
-            -- map entry messages must be defined before the messages that reference them
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "EmptyInner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "ScalarOnly",
-                                field = {
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "NestedA",
-                                field = {
-                                    { name = "empty", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "NestedB",
-                                field = {
-                                    { name = "scalar", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ScalarOnly" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "EmptyMapEntry",
-                                field = {
-                                    { name = "key", type = bean_info.FieldType.TYPE_STRING, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                    { name = "value", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { map_entry = true },
-                            },
-                            {
-                                name = "ScalarMapEntry",
-                                field = {
-                                    { name = "key", type = bean_info.FieldType.TYPE_STRING, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                    { name = "value", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ScalarOnly" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { map_entry = true },
-                            },
-                            {
-                                name = "Root",
-                                field = {
-                                    { name = "empty_field", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" },
-                                    { name = "scalar_field", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ScalarOnly" },
-                                    { name = "nested_a", type = bean_info.FieldType.TYPE_MESSAGE, number = 3, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.NestedA" },
-                                    { name = "nested_b", type = bean_info.FieldType.TYPE_MESSAGE, number = 4, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.NestedB" },
-                                    { name = "empty_list", type = bean_info.FieldType.TYPE_MESSAGE, number = 5, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.EmptyInner" },
-                                    { name = "scalar_list", type = bean_info.FieldType.TYPE_MESSAGE, number = 6, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.ScalarOnly" },
-                                    { name = "empty_map", type = bean_info.FieldType.TYPE_MESSAGE, number = 7, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.EmptyMapEntry" },
-                                    { name = "scalar_map", type = bean_info.FieldType.TYPE_MESSAGE, number = 8, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.ScalarMapEntry" },
-                                    { name = "choice_id", type = bean_info.FieldType.TYPE_INT32, number = 9, label = bean_info.FieldLabel.LABEL_OPTIONAL, oneof_index = 0 },
-                                    { name = "choice_empty", type = bean_info.FieldType.TYPE_MESSAGE, number = 10, label = bean_info.FieldLabel.LABEL_OPTIONAL, oneof_index = 0, type_name = ".demo.EmptyInner" },
-                                    { name = "choice_scalar", type = bean_info.FieldType.TYPE_MESSAGE, number = 11, label = bean_info.FieldLabel.LABEL_OPTIONAL, oneof_index = 0, type_name = ".demo.ScalarOnly" },
-                                },
-                                oneof_decl = {
-                                    { name = "choice" },
-                                },
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
+    describe("有效配置的 track_index 分配", function()
+        it("track 消息引用 trackable 消息", function()
+            local ds = pf.valid_reference_scenario()
+            local info = bean_info.build_info(ds)
             local root = info.messages["demo.Root"]
             assert.is_not_nil(root)
-
-            -- Verify trackable states
-            assert.are.equal("non-trackable", info.messages["demo.EmptyInner"].trackable_state)
-            assert.are.equal("trackable", info.messages["demo.ScalarOnly"].trackable_state)
-            assert.are.equal("non-trackable", info.messages["demo.NestedA"].trackable_state)
-            assert.are.equal("trackable", info.messages["demo.NestedB"].trackable_state)
-            assert.are.equal("trackable", root.trackable_state)
-
-            -- Verify track_index assignments
-            assert.are.equal(0, root.fields[1].track_index)  -- empty_field
-            assert.are.equal(1, root.fields[2].track_index)  -- scalar_field
-            assert.are.equal(0, root.fields[3].track_index)  -- nested_a
-            assert.are.equal(2, root.fields[4].track_index)  -- nested_b
-            assert.are.equal(0, root.fields[5].track_index)  -- empty_list
-            assert.are.equal(3, root.fields[6].track_index)  -- scalar_list
-            assert.are.equal(0, root.fields[7].track_index)  -- empty_map
-            assert.are.equal(4, root.fields[8].track_index)  -- scalar_map
-            -- oneof fields share track_index = 5
-            assert.are.equal(5, root.fields[9].track_index)  -- choice_id
-            assert.are.equal(5, root.fields[10].track_index) -- choice_empty
-            assert.are.equal(5, root.fields[11].track_index) -- choice_scalar
-            assert.are.equal(5, root.oneofs[1].track_index)  -- choice oneof
-
-            assert.are.equal(5, root.track_field_count)
+            assert.are.equal(1, root.fields[1].track_index)  -- child
+            assert.are.equal(2, root.fields[2].track_index)  -- id
+            assert.are.equal(2, root.track_field_count)
             assert.are.equal(1, root.track_words)
         end)
 
-        it("场景3：循环引用", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "A",
-                                field = {
-                                    { name = "b", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.B" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "B",
-                                field = {
-                                    { name = "a", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.A" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-
-            assert.are.equal("non-trackable", info.messages["demo.A"].trackable_state)
-            assert.are.equal("non-trackable", info.messages["demo.B"].trackable_state)
-
-            -- Both fields should have track_index = 0 since they reference non-trackable messages
-            local msg_a = info.messages["demo.A"]
-            local msg_b = info.messages["demo.B"]
-            assert.are.equal(0, msg_a.fields[1].track_index)
-            assert.are.equal(0, msg_b.fields[1].track_index)
-            assert.are.equal(0, msg_a.track_field_count)
-            assert.are.equal(0, msg_b.track_field_count)
-        end)
-
-        it("场景4：oneof 全部分支不可追踪", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "Inner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Outer",
-                                field = {
-                                    { name = "inner1", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, oneof_index = 0, type_name = ".demo.Inner" },
-                                    { name = "inner2", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, oneof_index = 0, type_name = ".demo.Inner" },
-                                },
-                                oneof_decl = {
-                                    { name = "choice" },
-                                },
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local outer = info.messages["demo.Outer"]
-
-            assert.are.equal("non-trackable", info.messages["demo.Inner"].trackable_state)
-            -- Outer has no trackable fields (both oneof branches are non-trackable messages)
-            assert.are.equal("non-trackable", outer.trackable_state)
-            assert.are.equal(0, outer.fields[1].track_index)
-            assert.are.equal(0, outer.fields[2].track_index)
-            assert.are.equal(0, outer.oneofs[1].track_index)
-            assert.are.equal(0, outer.track_field_count)
-        end)
-
-        it("场景5：data_index 不受影响", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "EmptyInner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Root",
-                                field = {
-                                    { name = "empty_field", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.EmptyInner" },
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
+        it("混合标量字段和 trackable 消息字段", function()
+            local ds = pf.valid_mixed_scenario()
+            local info = bean_info.build_info(ds)
             local root = info.messages["demo.Root"]
-
-            -- empty_field is non-trackable, but data_index is still allocated
-            assert.are.equal(0, root.fields[1].track_index)
-            assert.are.equal(1, root.fields[1].data_index)
-
-            -- id is trackable
-            assert.are.equal(1, root.fields[2].track_index)
-            assert.are.equal(2, root.fields[2].data_index)
+            assert.is_not_nil(root)
+            assert.are.equal(1, root.fields[1].track_index)  -- name
+            assert.are.equal(2, root.fields[2].track_index)  -- count
+            assert.are.equal(3, root.fields[3].track_index)  -- inner
+            assert.are.equal(3, root.track_field_count)
         end)
 
-        it("场景6：嵌套层级传播", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "DeepInner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Inner",
-                                field = {
-                                    { name = "deep", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.DeepInner" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Outer",
-                                field = {
-                                    { name = "inner", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.Inner" },
-                                    { name = "count", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-
-            assert.are.equal("non-trackable", info.messages["demo.DeepInner"].trackable_state)
-            assert.are.equal("non-trackable", info.messages["demo.Inner"].trackable_state)
-            assert.are.equal("trackable", info.messages["demo.Outer"].trackable_state)
-
-            local outer = info.messages["demo.Outer"]
-            -- inner field references non-trackable Inner, so track_index = 0
-            assert.are.equal(0, outer.fields[1].track_index)
-            -- count is a scalar field, so track_index = 1
-            assert.are.equal(1, outer.fields[2].track_index)
-            assert.are.equal(1, outer.track_field_count)
-        end)
-
-        it("场景7：消息自引用", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "SelfRef",
-                                field = {
-                                    { name = "self", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.SelfRef" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local self_ref = info.messages["demo.SelfRef"]
-
-            -- SelfRef has only a self-referencing message field, no scalar fields
-            assert.are.equal("non-trackable", self_ref.trackable_state)
-            assert.are.equal(0, self_ref.fields[1].track_index)
-            assert.are.equal(0, self_ref.track_field_count)
-            assert.are.equal(0, self_ref.track_words)
-        end)
-
-        it("场景8：三级嵌套不可追踪", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "L1",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "L2",
-                                field = {
-                                    { name = "l1", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.L1" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "L3",
-                                field = {
-                                    { name = "l2", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.L2" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Root",
-                                field = {
-                                    { name = "l3", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.L3" },
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-
-            -- L1 -> L2 -> L3 propagation: all non-trackable
-            assert.are.equal("non-trackable", info.messages["demo.L1"].trackable_state)
-            assert.are.equal("non-trackable", info.messages["demo.L2"].trackable_state)
-            assert.are.equal("non-trackable", info.messages["demo.L3"].trackable_state)
-            assert.are.equal("trackable", info.messages["demo.Root"].trackable_state)
-
+        it("oneof 在有效配置中正确分配 track_index", function()
+            local ds = pf.valid_oneof_scenario()
+            local info = bean_info.build_info(ds)
             local root = info.messages["demo.Root"]
-            -- l3 references non-trackable L3
-            assert.are.equal(0, root.fields[1].track_index)
-            -- id is a scalar field
-            assert.are.equal(1, root.fields[2].track_index)
+            assert.is_not_nil(root)
+            -- oneof 的所有字段共享同一个 track_index
+            assert.are.equal(1, root.fields[1].track_index)  -- text
+            assert.are.equal(1, root.fields[2].track_index)  -- num
+            assert.are.equal(1, root.fields[3].track_index)  -- inner
+            assert.are.equal(1, root.oneofs[1].track_index)  -- choice
+            -- Root 只有 oneof 的三个字段，共享 1 个 track_index
             assert.are.equal(1, root.track_field_count)
         end)
 
-        it("场景9：transient 标量 + 不可追踪消息", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "Inner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Outer",
-                                field = {
-                                    { name = "inner", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.Inner" },
-                                    { name = "temp", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, options = { transient = true } },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local outer = info.messages["demo.Outer"]
-
-            -- Outer has no effective trackable fields (inner is non-trackable, temp is transient)
-            assert.are.equal("non-trackable", outer.trackable_state)
-            assert.are.equal(0, outer.fields[1].track_index)
-            assert.are.equal(0, outer.fields[2].track_index)
-            assert.are.equal(0, outer.track_field_count)
-            assert.are.equal(0, outer.track_words)
+        it("track_words 计算正确（超过 64 个字段）", function()
+            local fields = {}
+            for i = 1, 65 do
+                fields[i] = db.field("f" .. i, bean_info.FieldType.TYPE_INT32, i, bean_info.FieldLabel.LABEL_OPTIONAL, {})
+            end
+            local ds = db.descriptor_set(
+                db.file("test.proto", "demo", {
+                    db.message("Big", fields, {}, {}, {}, { level = 1 })
+                }, {})
+            )
+            local info = bean_info.build_info(ds)
+            local msg = info.messages["demo.Big"]
+            assert.are.equal(65, msg.track_field_count)
+            assert.are.equal(2, msg.track_words)
         end)
 
-        it("场景10：repeated 标量字段不受消息可追踪性影响", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "Inner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Outer",
-                                field = {
-                                    { name = "ids", type = bean_info.FieldType.TYPE_INT32, number = 1, label = bean_info.FieldLabel.LABEL_REPEATED },
-                                    { name = "inner", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.Inner" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local outer = info.messages["demo.Outer"]
-
-            -- Outer is trackable because ids is a repeated scalar field
-            assert.are.equal("trackable", outer.trackable_state)
-            assert.are.equal(1, outer.fields[1].track_index)
-            assert.are.equal(0, outer.fields[2].track_index)
-            assert.are.equal(1, outer.track_field_count)
-        end)
-
-        it("场景11：空消息 track_field_count = 0", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "Empty",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local empty = info.messages["demo.Empty"]
-
-            assert.are.equal("non-trackable", empty.trackable_state)
-            assert.are.equal(0, empty.track_field_count)
-            assert.are.equal(0, empty.track_words)
-        end)
-
-        it("场景12：map value 为不可追踪消息时 track_index = 0，但 data_index 正常", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "ValueMsg",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "MsgMapEntry",
-                                field = {
-                                    { name = "key", type = bean_info.FieldType.TYPE_STRING, number = 1, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                    { name = "value", type = bean_info.FieldType.TYPE_MESSAGE, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL, type_name = ".demo.ValueMsg" },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { map_entry = true },
-                            },
-                            {
-                                name = "Root",
-                                field = {
-                                    { name = "msg_map", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.MsgMapEntry" },
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local root = info.messages["demo.Root"]
-
-            -- msg_map track_index = 0 because ValueMsg is non-trackable
-            assert.are.equal(0, root.fields[1].track_index)
-            -- but data_index is still allocated normally
-            assert.are.equal(1, root.fields[1].data_index)
-            -- id is trackable
-            assert.are.equal(1, root.fields[2].track_index)
-            assert.are.equal(3, root.fields[2].data_index)
-            assert.are.equal(1, root.track_field_count)
-        end)
-
-        it("场景13：可追踪消息包含不可追踪 repeated 消息字段", function()
-            local descriptor_set = {
-                file = {
-                    {
-                        name = "test.proto",
-                        package = "demo",
-                        message_type = {
-                            {
-                                name = "Inner",
-                                field = {},
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                            {
-                                name = "Outer",
-                                field = {
-                                    { name = "inners", type = bean_info.FieldType.TYPE_MESSAGE, number = 1, label = bean_info.FieldLabel.LABEL_REPEATED, type_name = ".demo.Inner" },
-                                    { name = "id", type = bean_info.FieldType.TYPE_INT32, number = 2, label = bean_info.FieldLabel.LABEL_OPTIONAL },
-                                },
-                                oneof_decl = {},
-                                enum_type = {},
-                                nested_type = {},
-                                options = { level = 1 },
-                            },
-                        },
-                        enum_type = {},
-                    },
-                },
-            }
-
-            local info = bean_info.build_info(descriptor_set)
-            local outer = info.messages["demo.Outer"]
-
-            -- Outer is trackable because id is a scalar field
-            assert.are.equal("trackable", outer.trackable_state)
-            -- inners is a repeated message field referencing non-trackable Inner
-            assert.are.equal(0, outer.fields[1].track_index)
-            -- id is trackable
-            assert.are.equal(1, outer.fields[2].track_index)
-            assert.are.equal(1, outer.track_field_count)
+        it("data_index 分配正确", function()
+            local ds = db.descriptor_set(
+                db.file("test.proto", "demo", {
+                    db.message("DataTest", {
+                        db.field("a", bean_info.FieldType.TYPE_INT32, 1, bean_info.FieldLabel.LABEL_OPTIONAL, {}),
+                        db.field("b", bean_info.FieldType.TYPE_STRING, 2, bean_info.FieldLabel.LABEL_OPTIONAL, {}),
+                    }, {}, {}, {}, { level = 0 })
+                }, {})
+            )
+            local info = bean_info.build_info(ds)
+            local msg = info.messages["demo.DataTest"]
+            assert.are.equal(1, msg.fields[1].data_index)
+            assert.are.equal(2, msg.fields[2].data_index)
         end)
     end)
 
@@ -1670,9 +1138,9 @@ describe("bean_info", function()
             assert.are.equal(1, msg.fields[7].oneof_index)
 
             -- track 分配
-            -- child 字段引用 level=0 的 demo.Child（non-trackable），故 track_index = 0
-            -- 7 个字段 - 1 个 oneof 共享 - 1 个 non-trackable message = 5 track slots
-            assert.are.equal(5, msg.track_field_count)
+            -- level=0 的 Child 被标记为 trackable，所以 child 字段也有 track_index
+            -- 7 个字段 - 1 个 oneof 共享 = 6 track slots
+            assert.are.equal(6, msg.track_field_count)
             assert.are.equal(1, msg.track_words)
         end)
 

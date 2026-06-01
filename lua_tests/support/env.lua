@@ -1,6 +1,13 @@
 local package_path_prefix = table.concat({
   "lua_lib/?.lua",
   "lua_lib/?/init.lua",
+  "lua_tests/?.lua",
+  "lua_tests/?/init.lua",
+  -- busted 运行时 cwd 可能是 lua_tests/，添加相对路径
+  "../lua_lib/?.lua",
+  "../lua_lib/?/init.lua",
+  "?.lua",
+  "?/init.lua",
   "src/?.lua",
   "src/?/init.lua",
   "./?.lua",
@@ -15,5 +22,6 @@ package.cpath = package_cpath_prefix .. ";" .. package.cpath
 local protoc = require("protoc")
 local p = protoc.new()
 p:addpath("lua_tests/fixtures/protoc")
+p:addpath("fixtures/protoc")
 p:loadfile("imports/shared.proto")
 
