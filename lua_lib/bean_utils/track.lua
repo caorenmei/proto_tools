@@ -1,4 +1,5 @@
-local math = require("math")
+local assertion = require("bean_utils.assertion")
+local assert_none = assertion.assert_none
 
 local M = {}
 
@@ -225,30 +226,19 @@ local function create_track_map_message(self, track_words, track_index, track_ma
     end
 end
 
-local assertion = require("bean_utils.assertion")
-
-local assert_none = assertion.assert_none
-
-M.assert_none = assertion.assert_none
-M.assert_int32 = assertion.assert_int32
-M.assert_uint32 = assertion.assert_uint32
-M.assert_string = assertion.assert_string
-M.assert_boolean = assertion.assert_boolean
-M.assert_float = assertion.assert_float
-
 ---@generic ValueType
 ---@param self any[]
 ---@param track_words integer
 ---@param track_index integer
 ---@param data_index integer
 ---@param value ValueType
----@param assertion fun(value: ValueType)
-function M.set_field(self, track_words, track_index, data_index, value, assertion)
+---@param assert_func fun(value: ValueType)
+function M.set_field(self, track_words, track_index, data_index, value, assert_func)
     local old_value = self[data_index]
     if old_value == value then
         return false
     end
-    assertion(value)
+    assert_func(value)
     self[data_index] = value
     set_track_bit(self, track_words, track_index, true)
     return true
@@ -281,14 +271,14 @@ end
 ---@param track_maps table
 ---@param oneof_index integer
 ---@param value ValueType
----@param assertion fun(value: ValueType)
-function M.set_oneof_field(self, track_words, track_index, data_index, track_maps, oneof_index, value, assertion)
+---@param assert_func fun(value: ValueType)
+function M.set_oneof_field(self, track_words, track_index, data_index, track_maps, oneof_index, value, assert_func)
     local old_index = self[data_index] --[[@as integer]]
     local old_value = self[data_index + 1]
     if old_index == oneof_index and old_value == value then
         return false
     end
-    assertion(value)
+    assert_func(value)
     if (old_index & 1) == 1 then
         old_value[1] = false
     end
@@ -350,9 +340,9 @@ end
 ---@param data_index integer
 ---@param track_maps table
 ---@param value ValueType
----@param assertion fun(value: ValueType)
-function M.add_repeated_value(self, track_words, track_index, data_index, track_maps, value, assertion)
-    assertion(value)
+---@param assert_func fun(value: ValueType)
+function M.add_repeated_value(self, track_words, track_index, data_index, track_maps, value, assert_func)
+    assert_func(value)
     local list = self[data_index] --[=[@as any[]?]=]
     if not list then
         list = {}
@@ -370,9 +360,9 @@ end
 ---@param track_maps table
 ---@param value_index integer
 ---@param value ValueType
----@param assertion fun(value: ValueType)
-function M.set_repeated_value(self, track_words, track_index, data_index, track_maps, value_index, value, assertion)
-    assertion(value)
+---@param assert_func fun(value: ValueType)
+function M.set_repeated_value(self, track_words, track_index, data_index, track_maps, value_index, value, assert_func)
+    assert_func(value)
     local list = self[data_index] --[=[@as any[]]=]
     assert(list and value_index >= 1 and value_index <= #list, "index out of range")
     if list[value_index] == value then
@@ -474,9 +464,9 @@ end
 ---@param track_maps table
 ---@param key KeyType
 ---@param value ValueType
----@param assertion fun(key: KeyType, value: ValueType)
-function M.set_map_value(self, track_words, track_index, data_index, track_maps, key, value, assertion)
-    assertion(key, value)
+---@param assert_func fun(key: KeyType, value: ValueType)
+function M.set_map_value(self, track_words, track_index, data_index, track_maps, key, value, assert_func)
+    assert_func(key, value)
     local length = self[data_index] --[[@as integer]]
     local map = self[data_index + 1]
     if not map then
