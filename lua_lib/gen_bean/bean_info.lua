@@ -62,7 +62,7 @@ local EnumTypes = {
 ---@field oneofs gen_bean.OneofInfo[] oneof 字段列表
 ---@field track_field_count integer 脏字段数量
 ---@field track_words integer 需要多少个 64 位整数来存储脏字段的位标记，等于 math.ceil(track_field_count / 64)
----@field trackable_state "trackable"|"non-trackable" 消息的可追踪状态
+---@field trackable_state "unknown" | "trackable"|"non-trackable" 消息的可追踪状态
 
 ---@class gen_bean.EnumInfo
 ---@field descriptor table 枚举描述符
