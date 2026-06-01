@@ -1,15 +1,17 @@
 describe("bean_utils.track", function()
     local track
+    local assertion
 
     setup(function()
         dofile("lua_tests/support/env.lua")
         track = require("bean_utils.track")
+        assertion = require("bean_utils.assertion")
     end)
 
     describe("set_field", function()
         it("sets new value and marks track bit", function()
             local self = { false, 0, 0 }
-            local result = track.set_field(self, 1, 1, 3, 42, track.assert_int32)
+            local result = track.set_field(self, 1, 1, 3, 42, assertion.assert_int32)
             assert.is_true(result)
             assert.are.equal(42, self[3])
             -- track bit should be set: track_index=1 -> word_index=2, bit 0
@@ -18,7 +20,7 @@ describe("bean_utils.track", function()
 
         it("returns false when setting same value without modifying track bit", function()
             local self = { false, 0, 42 }
-            local result = track.set_field(self, 1, 1, 3, 42, track.assert_int32)
+            local result = track.set_field(self, 1, 1, 3, 42, assertion.assert_int32)
             assert.is_false(result)
             assert.are.equal(0, self[2])
         end)
@@ -29,7 +31,7 @@ describe("bean_utils.track", function()
                 table.insert(calls, v)
             end
             local self = { callback, 0, 0 }
-            track.set_field(self, 1, 1, 3, 42, track.assert_int32)
+            track.set_field(self, 1, 1, 3, 42, assertion.assert_int32)
             assert.are.same({ true }, calls)
         end)
 
@@ -39,9 +41,9 @@ describe("bean_utils.track", function()
                 table.insert(calls, v)
             end
             local self = { callback, 0, 0, 0 }
-            track.set_field(self, 1, 1, 3, 42, track.assert_int32)
+            track.set_field(self, 1, 1, 3, 42, assertion.assert_int32)
             assert.are.same({ true }, calls)
-            track.set_field(self, 1, 2, 4, 100, track.assert_int32)
+            track.set_field(self, 1, 2, 4, 100, assertion.assert_int32)
             -- callback should not be called again since bean was already tracked
             assert.are.same({ true }, calls)
         end)
@@ -89,14 +91,14 @@ describe("bean_utils.track", function()
     describe("track bit operations", function()
         it("sets correct bit for track_index within first word", function()
             local self = { false, 0, 0 }
-            track.set_field(self, 1, 64, 3, 42, track.assert_int32)
+            track.set_field(self, 1, 64, 3, 42, assertion.assert_int32)
             -- track_index=64 -> word_index=2, bit_index=63
             assert.are.equal(1 << 63, self[2])
         end)
 
         it("sets correct bit for track_index crossing to second word", function()
             local self = { false, 0, 0, 0 }
-            track.set_field(self, 2, 65, 4, 42, track.assert_int32)
+            track.set_field(self, 2, 65, 4, 42, assertion.assert_int32)
             -- track_index=65 -> word_index=3, bit_index=0
             assert.are.equal(1, self[3])
             assert.are.equal(0, self[2])
@@ -104,7 +106,7 @@ describe("bean_utils.track", function()
 
         it("sets correct bit for track_index=128 in second word", function()
             local self = { false, 0, 0, 0 }
-            track.set_field(self, 2, 128, 4, 42, track.assert_int32)
+            track.set_field(self, 2, 128, 4, 42, assertion.assert_int32)
             -- track_index=128 -> word_index=3, bit_index=63
             assert.are.equal(1 << 63, self[3])
         end)
@@ -115,7 +117,7 @@ describe("bean_utils.track", function()
                 table.insert(calls, v)
             end
             local self = { callback, 0, 0 }
-            track.set_field(self, 1, 1, 3, 42, track.assert_int32)
+            track.set_field(self, 1, 1, 3, 42, assertion.assert_int32)
             assert.are.same({ true }, calls)
             -- Manually clear the bit using internal mechanism via set_field not possible
             -- We test via the set_track_bit indirectly through track_map_update
@@ -137,7 +139,7 @@ describe("bean_utils.track", function()
             local self = { false, 0, 0, false }
             local track_maps = {}
             -- use even oneof_index (2) for non-message string value
-            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", track.assert_string)
+            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", assertion.assert_string)
             assert.are.equal(2, self[3])
             assert.are.equal("hello", self[4])
             assert.are.equal(1, self[2])
@@ -147,9 +149,9 @@ describe("bean_utils.track", function()
             local self = { false, 0, 0, false }
             local track_maps = {}
             -- use even oneof_index (2) for non-message string value
-            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", track.assert_string)
+            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", assertion.assert_string)
             -- change to another even oneof_index (4) for int32 value
-            track.set_oneof_field(self, 1, 1, 3, track_maps, 4, 42, track.assert_int32)
+            track.set_oneof_field(self, 1, 1, 3, track_maps, 4, 42, assertion.assert_int32)
             -- track_map_remove_add: state was Added (1), which is not handled,
             -- so state remains Added (1)
             assert.are.equal(1, track_maps[self][1])
@@ -160,8 +162,8 @@ describe("bean_utils.track", function()
         it("set_oneof_field with same index and value returns false", function()
             local self = { false, 0, 0, false }
             local track_maps = {}
-            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", track.assert_string)
-            local result = track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", track.assert_string)
+            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", assertion.assert_string)
+            local result = track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "hello", assertion.assert_string)
             assert.is_false(result)
         end)
 
@@ -211,7 +213,7 @@ describe("bean_utils.track", function()
             end)
             assert.is_function(msg[1])
             -- Replace with a non-message value (even index)
-            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "string_value", track.assert_string)
+            track.set_oneof_field(self, 1, 1, 3, track_maps, 2, "string_value", assertion.assert_string)
             -- Old message's track callback should be disabled
             assert.is_false(msg[1])
         end)
@@ -221,7 +223,7 @@ describe("bean_utils.track", function()
         it("add_repeated_value adds value and marks Added in track_maps", function()
             local self = { false, 0, nil }
             local track_maps = {}
-            track.add_repeated_value(self, 1, 1, 3, track_maps, 10, track.assert_int32)
+            track.add_repeated_value(self, 1, 1, 3, track_maps, 10, assertion.assert_int32)
             local list = self[3]
             assert.is_not_nil(list)
             assert.are.equal(1, #list)
@@ -234,7 +236,7 @@ describe("bean_utils.track", function()
         it("set_repeated_value updates value and marks Updated", function()
             local self = { false, 0, { 10, 20, 30 } }
             local track_maps = {}
-            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, track.assert_int32)
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, assertion.assert_int32)
             assert.are.equal(99, self[3][2])
             assert.are.equal(2, track_maps[self[3]][2])
         end)
@@ -243,10 +245,10 @@ describe("bean_utils.track", function()
             local self = { false, 0, { 10, 20, 30 } }
             local track_maps = {}
             -- First set to establish state
-            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, track.assert_int32)
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, assertion.assert_int32)
             assert.are.equal(2, track_maps[self[3]][2])
             -- Set same value again - should not change track state
-            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, track.assert_int32)
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, assertion.assert_int32)
             assert.are.equal(99, self[3][2])
             assert.are.equal(2, track_maps[self[3]][2])
         end)
@@ -515,7 +517,7 @@ describe("bean_utils.track", function()
         it("Added -> Removed -> nil (cleared)", function()
             local self = { false, 0, nil }
             local track_maps = {}
-            track.add_repeated_value(self, 1, 1, 3, track_maps, 10, track.assert_int32)
+            track.add_repeated_value(self, 1, 1, 3, track_maps, 10, assertion.assert_int32)
             local list = self[3]
             assert.are.equal(1, track_maps[list][1])
             track.pop_repeated_value(self, 1, 1, 3, track_maps)
@@ -528,7 +530,7 @@ describe("bean_utils.track", function()
             local track_maps = {}
             -- simulate pre-existing state: mark as Updated first
             track_maps[self[3]] = { [1] = 2 }
-            track.set_repeated_value(self, 1, 1, 3, track_maps, 1, 20, track.assert_int32)
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 1, 20, assertion.assert_int32)
             -- Updated then set again: track_map_update with state=Updated and has_bit=true
             -- does nothing, so state stays Updated (2)
             assert.are.equal(2, track_maps[self[3]][1])
