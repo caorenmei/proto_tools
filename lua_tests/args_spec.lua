@@ -1,6 +1,10 @@
-local args = require("gen_bean.args")
-
 describe("gen_model.args", function()
+    local args
+
+    setup(function()
+        dofile("lua_tests/support/env.lua")
+        args = require("gen_bean.args")
+    end)
     it("正常解析所有参数", function()
         local result = args.parse({"-d", "/tmp/output", "-f", "/tmp/desc.pb"})
         assert.are.equal("/tmp/output", result.out_put_dir)
