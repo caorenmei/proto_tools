@@ -62,7 +62,7 @@ local EnumTypes = {
 ---@field oneofs gen_bean.OneofInfo[] oneof 字段列表
 ---@field track_field_count integer 脏字段数量
 ---@field track_words integer 需要多少个 64 位整数来存储脏字段的位标记，等于 math.ceil(track_field_count / 64)
----@field trackable_state "trackable"|"non-trackable" 消息的可追踪状态
+---@field trackable_state "unknown" | "trackable"|"non-trackable" 消息的可追踪状态
 
 ---@class gen_bean.EnumInfo
 ---@field descriptor table 枚举描述符
@@ -117,7 +117,7 @@ function M.build_info(descriptor_set)
     end
 
     M.compute_trackable_states(info)
-    M.rebuild_track_indices(info)
+    M.validate_track_references(info)
 
     return info
 end
@@ -327,7 +327,13 @@ function M.compute_trackable_states(info)
     -- Initialize all messages to "unknown"
     for _, file_info in pairs(info.files) do
         for _, message_info in ipairs(file_info.messages) do
-            message_info.trackable_state = "unknown"
+            -- level=0 messages don't participate in track system, treat as trackable
+            local level = message_info.descriptor.options and message_info.descriptor.options.level
+            if level == 0 then
+                message_info.trackable_state = "trackable"
+            else
+                message_info.trackable_state = "unknown"
+            end
         end
     end
 
@@ -396,62 +402,35 @@ function M.compute_trackable_states(info)
     end
 end
 
---- Rebuild track_index for all messages based on trackable_state.
---- Fields referencing non-trackable messages have their track_index set to 0.
+--- Validate that no track field references a non-trackable message.
+--- Throws an error if any track field (track_index > 0) references a message
+--- whose trackable_state is "non-trackable".
 ---@param info gen_bean.DescriptorSetInfo
-function M.rebuild_track_indices(info)
+function M.validate_track_references(info)
     for _, file_info in pairs(info.files) do
         for _, message_info in ipairs(file_info.messages) do
-            -- Step 1: Clear track_index for fields referencing non-trackable messages
             for _, field in ipairs(message_info.fields) do
                 if field.track_index > 0 then
                     if type(field.type) == "string" then
                         local ref_msg = info.messages[field.type]
                         if ref_msg and ref_msg.trackable_state == "non-trackable" then
-                            field.track_index = 0
+                            error(string.format(
+                                "track field '%s' in message '%s' references non-trackable message '%s'",
+                                field.name, message_info.full_name, field.type
+                            ))
                         end
                     end
                     if field.is_map and type(field.map_value_type) == "string" then
                         local ref_msg = info.messages[field.map_value_type]
                         if ref_msg and ref_msg.trackable_state == "non-trackable" then
-                            field.track_index = 0
+                            error(string.format(
+                                "track map field '%s' in message '%s' references non-trackable message '%s'",
+                                field.name, message_info.full_name, field.map_value_type
+                            ))
                         end
                     end
                 end
             end
-
-            -- Step 2: Reassign continuous track_index numbers
-            -- Reset all oneof track_index first
-            for _, oneof_info in ipairs(message_info.oneofs) do
-                oneof_info.track_index = 0
-            end
-
-            local track_index = 0
-            for _, field in ipairs(message_info.fields) do
-                if field.oneof_index > 0 then
-                    if field.track_index > 0 then
-                        local oneof_info = message_info.oneofs[field.oneof_index]
-                        if oneof_info.track_index == 0 then
-                            track_index = track_index + 1
-                            oneof_info.track_index = track_index
-                        end
-                    end
-                elseif field.track_index > 0 then
-                    track_index = track_index + 1
-                    field.track_index = track_index
-                end
-            end
-
-            -- Sync oneof fields' track_index to their oneof_info's track_index
-            for _, field in ipairs(message_info.fields) do
-                if field.oneof_index > 0 then
-                    local oneof_info = message_info.oneofs[field.oneof_index]
-                    field.track_index = oneof_info.track_index
-                end
-            end
-
-            message_info.track_field_count = track_index
-            message_info.track_words = math.ceil(track_index / 64)
         end
     end
 end
