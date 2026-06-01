@@ -375,6 +375,9 @@ function M.set_repeated_value(self, track_words, track_index, data_index, track_
     assertion(value)
     local list = self[data_index] --[=[@as any[]]=]
     assert(list and value_index >= 1 and value_index <= #list, "index out of range")
+    if list[value_index] == value then
+        return
+    end
     list[value_index] = value
     track_map_update(self, track_words, track_index, track_maps, list, value_index, true)
 end
@@ -485,7 +488,7 @@ function M.set_map_value(self, track_words, track_index, data_index, track_maps,
         self[data_index] = length
         map[key] = value
         track_map_add(self, track_words, track_index, track_maps, map, key)
-    else
+    elseif map[key] ~= value then
         map[key] = value
         track_map_update(self, track_words, track_index, track_maps, map, key, true)
     end
