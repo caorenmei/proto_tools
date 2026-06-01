@@ -239,6 +239,18 @@ describe("bean_utils.track", function()
             assert.are.equal(2, track_maps[self[3]][2])
         end)
 
+        it("set_repeated_value with same value does not mark Updated", function()
+            local self = { false, 0, { 10, 20, 30 } }
+            local track_maps = {}
+            -- First set to establish state
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, track.assert_int32)
+            assert.are.equal(2, track_maps[self[3]][2])
+            -- Set same value again - should not change track state
+            track.set_repeated_value(self, 1, 1, 3, track_maps, 2, 99, track.assert_int32)
+            assert.are.equal(99, self[3][2])
+            assert.are.equal(2, track_maps[self[3]][2])
+        end)
+
         it("pop_repeated_value removes last value and marks Removed", function()
             local self = { false, 0, { 10, 20, 30 } }
             local track_maps = {}
@@ -353,6 +365,24 @@ describe("bean_utils.track", function()
             assert.are.equal(200, map["key1"])
             -- key was Added (1), updating an Added key keeps it as Added (1)
             -- track_map_update only sets Updated when state is nil
+            assert.are.equal(1, track_maps[map]["key1"])
+        end)
+
+        it("set_map_value with same value does not change track state", function()
+            local self = { false, 0, 0, nil }
+            local track_maps = {}
+            track.set_map_value(self, 1, 1, 3, track_maps, "key1", 100, function(k, v)
+                assert.is_string(k)
+                assert.is_number(v)
+            end)
+            local map = self[4]
+            assert.are.equal(1, track_maps[map]["key1"])
+            -- Set same value again - should not change track state
+            track.set_map_value(self, 1, 1, 3, track_maps, "key1", 100, function(k, v)
+                assert.is_string(k)
+                assert.is_number(v)
+            end)
+            assert.are.equal(100, map["key1"])
             assert.are.equal(1, track_maps[map]["key1"])
         end)
 

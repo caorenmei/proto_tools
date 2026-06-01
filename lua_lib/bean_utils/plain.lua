@@ -112,6 +112,9 @@ function M.set_repeated_value(self, data_index, value_index, value, assertion)
     assertion(value)
     local list = self[data_index] --[=[@as any[]]=]
     assert(list and value_index >= 1 and value_index <= #list, "index out of range")
+    if list[value_index] == value then
+        return
+    end
     list[value_index] = value
 end
 
@@ -191,8 +194,10 @@ function M.set_map_value(self, data_index, key, value, assertion)
     if map[key] == nil then
         length = length + 1
         self[data_index] = length
+        map[key] = value
+    elseif map[key] ~= value then
+        map[key] = value
     end
-    map[key] = value
 end
 
 ---@generic KeyType
