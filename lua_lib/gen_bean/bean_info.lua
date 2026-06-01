@@ -62,6 +62,7 @@ local EnumTypes = {
 ---@field oneofs gen_bean.OneofInfo[] oneof 字段列表
 ---@field track_field_count integer 脏字段数量
 ---@field track_words integer 需要多少个 64 位整数来存储脏字段的位标记，等于 math.ceil(track_field_count / 64)
+---@field trackable_state "trackable"|"non-trackable" 消息的可追踪状态
 
 ---@class gen_bean.EnumInfo
 ---@field descriptor table 枚举描述符
@@ -115,6 +116,9 @@ function M.build_info(descriptor_set)
         end
     end
 
+    M.compute_trackable_states(info)
+    M.rebuild_track_indices(info)
+
     return info
 end
 
@@ -136,6 +140,7 @@ function M.build_message_info(info, file_info, message, name_prefix, name_prefix
         oneofs = {},
         track_field_count = 0,
         track_words = 0,
+        trackable_state = "unknown",
     } --[[ @as gen_bean.MessageInfo ]]
     info.messages[full_name] = message_info
     info.messages[full_name_dot] = message_info
@@ -310,6 +315,143 @@ function M.process_fields(info, file_info, message_info)
         else
             field.data_index = data_index + 1
             data_index = data_index + 1
+        end
+    end
+end
+
+--- Compute whether each message is trackable by iterative convergence.
+--- A message is trackable if it has at least one field whose track_index > 0
+--- and that field is either a scalar/enum type or references a trackable message.
+---@param info gen_bean.DescriptorSetInfo
+function M.compute_trackable_states(info)
+    -- Initialize all messages to "unknown"
+    for _, file_info in pairs(info.files) do
+        for _, message_info in ipairs(file_info.messages) do
+            message_info.trackable_state = "unknown"
+        end
+    end
+
+    local changed = true
+    while changed do
+        changed = false
+        for _, file_info in pairs(info.files) do
+            for _, message_info in ipairs(file_info.messages) do
+                if message_info.trackable_state ~= "unknown" then
+                    goto continue_message
+                end
+
+                local has_trackable_field = false
+                local undetermined = false
+
+                for _, field in ipairs(message_info.fields) do
+                    if field.track_index == 0 then
+                        -- Field itself is not tracked (transient or level=0)
+                        goto continue_field
+                    end
+
+                    if type(field.type) ~= "string" then
+                        -- Scalar or enum field is tracked
+                        has_trackable_field = true
+                        break
+                    else
+                        -- Message type field, check referenced message's trackable state
+                        local ref_msg = info.messages[field.type]
+                        if ref_msg.trackable_state == "trackable" then
+                            has_trackable_field = true
+                            break
+                        elseif ref_msg.trackable_state == "non-trackable" then
+                            -- Referenced message is non-trackable, this field doesn't count
+                            goto continue_field
+                        else
+                            -- Referenced message state is unknown, cannot determine yet
+                            undetermined = true
+                            break
+                        end
+                    end
+
+                    ::continue_field::
+                end
+
+                if has_trackable_field then
+                    message_info.trackable_state = "trackable"
+                    changed = true
+                elseif not undetermined then
+                    -- All fields are either not tracked or reference non-trackable messages
+                    message_info.trackable_state = "non-trackable"
+                    changed = true
+                end
+
+                ::continue_message::
+            end
+        end
+    end
+
+    -- After loop, mark remaining unknown messages as non-trackable (conservative strategy)
+    for _, file_info in pairs(info.files) do
+        for _, message_info in ipairs(file_info.messages) do
+            if message_info.trackable_state == "unknown" then
+                message_info.trackable_state = "non-trackable"
+            end
+        end
+    end
+end
+
+--- Rebuild track_index for all messages based on trackable_state.
+--- Fields referencing non-trackable messages have their track_index set to 0.
+---@param info gen_bean.DescriptorSetInfo
+function M.rebuild_track_indices(info)
+    for _, file_info in pairs(info.files) do
+        for _, message_info in ipairs(file_info.messages) do
+            -- Step 1: Clear track_index for fields referencing non-trackable messages
+            for _, field in ipairs(message_info.fields) do
+                if field.track_index > 0 then
+                    if type(field.type) == "string" then
+                        local ref_msg = info.messages[field.type]
+                        if ref_msg and ref_msg.trackable_state == "non-trackable" then
+                            field.track_index = 0
+                        end
+                    end
+                    if field.is_map and type(field.map_value_type) == "string" then
+                        local ref_msg = info.messages[field.map_value_type]
+                        if ref_msg and ref_msg.trackable_state == "non-trackable" then
+                            field.track_index = 0
+                        end
+                    end
+                end
+            end
+
+            -- Step 2: Reassign continuous track_index numbers
+            -- Reset all oneof track_index first
+            for _, oneof_info in ipairs(message_info.oneofs) do
+                oneof_info.track_index = 0
+            end
+
+            local track_index = 0
+            for _, field in ipairs(message_info.fields) do
+                if field.oneof_index > 0 then
+                    if field.track_index > 0 then
+                        local oneof_info = message_info.oneofs[field.oneof_index]
+                        if oneof_info.track_index == 0 then
+                            track_index = track_index + 1
+                            oneof_info.track_index = track_index
+                        end
+                    end
+                elseif field.track_index > 0 then
+                    track_index = track_index + 1
+                    field.track_index = track_index
+                end
+            end
+
+            -- Sync oneof fields' track_index to their oneof_info's track_index
+            for _, field in ipairs(message_info.fields) do
+                if field.oneof_index > 0 then
+                    local oneof_info = message_info.oneofs[field.oneof_index]
+                    field.track_index = oneof_info.track_index
+                end
+            end
+
+            message_info.track_field_count = track_index
+            message_info.track_words = math.ceil(track_index / 64)
         end
     end
 end
