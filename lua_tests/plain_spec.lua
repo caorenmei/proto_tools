@@ -9,14 +9,6 @@ describe("bean_utils.plain", function()
         return { false }
     end
 
-    -- 辅助函数：创建带 map 初始化的 self 表
-    -- map 字段使用 data_index 存长度，data_index+1 存 map 表，长度需初始化为 0
-    local function make_self_with_map()
-        local self = { false }
-        -- 为 map 操作预初始化长度（在 data_index 位置）
-        -- 实际由测试在调用前设置
-        return self
-    end
 
     describe("assertions", function()
         describe("assert_int32", function()
