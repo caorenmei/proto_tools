@@ -24,12 +24,33 @@ compatibility: gh CLI, git
 
 ## 代理配置
 
-`gh` 命令在遇到网络问题时，通过代理重试。
+远程仓库为 GitHub 时，所有网络请求通过代理执行。
 
 - 读取环境变量 `GH_PROXY`，默认值为 `http://127.0.0.1:1080`
-- 执行 gh 命令前，设置 `HTTPS_PROXY` 和 `HTTP_PROXY`
+
+**git 代理**：通过 `git config --local` 持久化到本地仓库配置，一次设置后后续 git 命令自动生效。
+
+**gh 代理**：通过环境变量 `HTTPS_PROXY` / `HTTP_PROXY` 设置，每次执行 `gh` 命令前配置。
 
 ## 工作流程
+
+### 步骤 0：检测远程并配置代理
+
+运行 `git remote get-url origin` 获取远程仓库 URL。
+
+- 若 URL 包含 `github.com`：
+  1. 配置 git 代理（持久化到本地仓库）：
+     ```bash
+     git config --local http.proxy ${GH_PROXY:-http://127.0.0.1:1080}
+     git config --local https.proxy ${GH_PROXY:-http://127.0.0.1:1080}
+     ```
+  2. 设置 gh 代理环境变量（当前 shell）：
+     ```bash
+     export HTTPS_PROXY=${GH_PROXY:-http://127.0.0.1:1080}
+     export HTTP_PROXY=${GH_PROXY:-http://127.0.0.1:1080}
+     ```
+
+- 若不是 GitHub（如 GitLab、Gitee 等）：跳过代理配置
 
 ### 步骤 1：检查当前分支
 
@@ -62,37 +83,29 @@ git push -u origin $(git branch --show-current)
 
 ### 步骤 4：创建 PR
 
-先检查是否已有活跃的 PR：
+先检查是否已有活跃的 PR（带上代理环境变量）：
 
 ```bash
-gh pr view --json state,number,url
+HTTPS_PROXY=${GH_PROXY:-http://127.0.0.1:1080} HTTP_PROXY=${GH_PROXY:-http://127.0.0.1:1080} gh pr view --json state,number,url
 ```
 
 - 如果返回结果且 `state` 为 `"OPEN"`，记录 PR URL，跳到步骤 5
 - 如果没有活跃的 PR，创建新的 PR：
 
 ```bash
-gh pr create --fill
+HTTPS_PROXY=${GH_PROXY:-http://127.0.0.1:1080} HTTP_PROXY=${GH_PROXY:-http://127.0.0.1:1080} gh pr create --fill
 ```
 
 `--fill` 会自动使用提交消息作为 PR 标题和描述。
-
-**代理处理**：如果 gh 命令因网络问题失败，设置代理后重试：
-
-```bash
-export HTTPS_PROXY=${GH_PROXY:-http://127.0.0.1:1080}
-export HTTP_PROXY=${GH_PROXY:-http://127.0.0.1:1080}
-gh pr create --fill
-```
 
 记录创建成功的 PR URL。
 
 ### 步骤 5：监视 PR 状态
 
-轮询 PR 状态，直到 PR 被合并。
+轮询 PR 状态，直到 PR 被合并（每次查询带上代理环境变量）：
 
 ```bash
-gh pr view --json state,mergeStateStatus,checks
+HTTPS_PROXY=${GH_PROXY:-http://127.0.0.1:1080} HTTP_PROXY=${GH_PROXY:-http://127.0.0.1:1080} gh pr view --json state,mergeStateStatus,checks
 ```
 
 **轮询策略**：
@@ -101,8 +114,6 @@ gh pr view --json state,mergeStateStatus,checks
 - 如果 `state` 变为 `"CLOSED"`，报错并停止
 - 如果 `checks` 中有失败的检查，向用户报告失败项，询问是否继续等待
 - 最长等待时间：30 分钟（超过则提示用户手动继续）
-
-**代理处理**：如果 gh 命令因网络问题失败，设置代理后重试。
 
 ### 步骤 6：同步本地并清理分支
 
@@ -135,9 +146,9 @@ PR 合并成功后：
 | gh 未安装或未认证 | 提示用户安装并运行 `gh auth login` |
 | 当前不在 git 仓库 | 报错并停止 |
 | push 失败（非快进） | 自动 rebase 后重试 |
-| PR 创建失败 | 设置代理重试，仍失败则报错 |
+| PR 创建失败 | 检查代理是否正常，重试最多 3 次，仍失败则报错 |
 | PR 被关闭 | 报错并停止，不执行清理 |
-| 网络超时 | 设置代理重试，最多 3 次 |
+| 网络超时 | 检查代理是否正常，重试最多 3 次 |
 | main 分支有本地更改 | 先 stash，创建 feature 分支后恢复 |
 
 ## 示例
