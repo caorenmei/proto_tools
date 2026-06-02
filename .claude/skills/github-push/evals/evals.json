@@ -1,0 +1,23 @@
+{
+  "skill_name": "github-push",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "把刚才写的功能推送到远程仓库",
+      "expected_output": "自动创建 feature 分支、提交更改、push、创建 PR、等待合并、同步本地并清理分支",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "我在 main 分支上改了一些代码，帮我 push 上去",
+      "expected_output": "检测到在 main 分支，自动创建 feature 分支并切换，然后执行完整推送流程",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "feature/api-refactor 这个分支已经 push 了，帮我看看 PR 合并了没有",
+      "expected_output": "检查已有 PR 状态，如已合并则同步本地 main 并删除 feature 分支",
+      "files": []
+    }
+  ]
+}
